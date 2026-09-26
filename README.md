@@ -2,18 +2,20 @@
 
 **Verify Appwrite changes before they become incidents.**
 
-> **Status: early stage, core loop working end to end.** CLI skeleton,
-> configuration, the Appwrite REST client, `version`, `doctor`,
-> `inventory`, `snapshot`, `compare`, `verify`, and `preflight` are
-> implemented, tested, and verified against a live Appwrite Cloud
-> project — covering TablesDB (databases/tables/rows, with opt-in
-> sampled row *content* verification via `--sample-rows`) and Storage
-> (buckets/files, including file content-integrity checks via MD5
-> signature). Deliberately introduced a permission change, a config
+> **Status: early stage, but every core command is real.** All 8
+> commands — `version`, `doctor`, `inventory`, `snapshot`, `compare`,
+> `verify`, `preflight`, `report` — are implemented, tested, and
+> verified against a live Appwrite Cloud project, covering TablesDB
+> (databases/tables/rows, with opt-in sampled row *content* verification
+> via `--sample-rows`), Storage (buckets/files, with file
+> content-integrity checks via MD5 signature), and HTML/JSON/text
+> reporting. Deliberately introduced a permission change, a config
 > change, a deleted table, changed file content, a changed row's
 > content, and a destination resource ID collision, and confirmed amg
-> caught every one of them. `report` is a registered command that
-> currently exits with an explicit "not yet implemented" error — see
+> caught every one of them. What's still missing is *breadth*, not
+> depth: legacy Databases/Users/Functions/Sites aren't inventoried yet
+> (explicitly marked `UNSUPPORTED`, never silently skipped), and there's
+> no fault-injection lab or release binaries yet — see
 > [Roadmap](#roadmap). This README describes what exists today, not the
 > finished product.
 
@@ -132,6 +134,21 @@ the same ID as something in the source — a real collision risk, not a
 "looks the same" success the way `verify` treats it. Answers "can I safely
 proceed, or are there unresolved risks?"
 
+```bash
+./amg verify --json > result.json
+./amg report --format html --out report.html result.json
+```
+
+`report` re-renders a `compare`/`verify` result you already saved as
+`--json` — as `text` (default), `json` (pretty-printed), or a
+self-contained `html` file with no external stylesheet, script, or
+network request of any kind, safe to open straight from disk or attach
+to a PR/ticket. Every value is HTML-escaped (a resource literally named
+`<script>...</script>` renders as inert text, not executes), and
+PASS/WARN/BLOCK is always shown as text, never color alone. `report`
+makes no network calls and needs no Appwrite credentials — it only reads
+the JSON file you give it.
+
 ## Configuration
 
 amg reads configuration from environment variables (and an optional local
@@ -147,19 +164,44 @@ amg reads configuration from environment variables (and an optional local
 API keys are never logged, never written to manifests or reports, and are
 only ever sent as the `X-Appwrite-Key` HTTP header.
 
-## Example workflow (last step, `report`, isn't built yet)
+## Example workflow
 
 ```text
-amg doctor                  # confirm connectivity + auth
-amg preflight                # check source/destination readiness, before migrating
+amg doctor                                          # confirm connectivity + auth
+amg preflight                                       # check readiness before migrating
 # ... you run the Appwrite migration or upgrade yourself ...
-amg verify                   # compare source and destination live
-# or, offline, from saved manifests:
+amg verify --json > result.json                     # compare source and destination live
+amg report --format html --out report.html result.json
+
+# or, fully offline, from saved manifests:
 amg snapshot --label source --out source.json       # before the migration
 amg snapshot --label destination --out dest.json    # after the migration
-amg compare source.json dest.json
-amg report --format html    # not yet implemented
+amg compare --json source.json dest.json > result.json
+amg report --format html --out report.html result.json
 ```
+
+## Example report
+
+Real terminal output from the live-testing session described under
+[Testing](#testing) below (`amg compare` on two manifests captured
+minutes apart, after deliberately changing a table's permissions and
+`rowSecurity` flag):
+
+```text
+Appwrite Migration Guard — compare
+
+Source:      source
+Destination: destination
+
+BLOCK [config_changed] table "widgets" metadata "row_security" changed: false -> true
+BLOCK [permission_changed] table "widgets" permissions changed: [read("any")] -> [read("users")]
+
+Result: BLOCK
+```
+
+The same result rendered with `amg report --format html` produces a
+static page with a PASS/WARN/BLOCK badge, a findings table, and no
+external dependencies — safe to open offline or attach to a PR.
 
 ## Architecture
 
@@ -170,6 +212,7 @@ internal/appwrite/   Minimal Appwrite REST client (auth, retries, pagination, Ta
 internal/inventory/  Canonical resource model + bounded-concurrency collector
 internal/manifest/   Deterministic on-disk snapshot format (no credentials, ever)
 internal/compare/    Offline PASS/WARN/BLOCK comparison engine
+internal/report/     Self-contained HTML report renderer (no external resources)
 internal/config/     Environment-variable configuration loading
 internal/errs/       Typed error taxonomy (connectivity/auth/rate-limit/...)
 internal/version/    Build-time version metadata
@@ -214,7 +257,7 @@ go test ./...
 All claims of "supported" or "tested" in this repository are backed by the
 tests in the corresponding package — see `*_test.go` files next to the
 code they test. Beyond mocked-HTTP tests, amg's core loop has been run
-four times against a live Appwrite Cloud project. TablesDB: create a
+five times against a live Appwrite Cloud project. TablesDB: create a
 database + table, snapshot it as "source", change its permissions and a
 config flag, snapshot again as "destination", `amg compare` the two
 manifests (correctly reported both changes and nothing else), delete the
@@ -234,7 +277,11 @@ with `--sample-rows 10` as "source", edited one row's content, snapshotted
 again as "destination" — `amg compare` correctly reported
 `row_content_changed` naming the changed row and its before/after
 digests, with the unchanged row and both rows' `$updatedAt` drift
-correctly producing no finding. All test resources were deleted
+correctly producing no finding. Reporting: piped a real `amg compare
+--json` result (a permission + config change on a live table) through
+`amg report --format html` and inspected the output file directly — a
+complete, valid HTML document with both findings rendered, auto-escaped,
+and no external resource references. All test resources were deleted
 afterward.
 
 ## Migration lab
@@ -247,8 +294,9 @@ prove amg's comparison engine actually detects real problems — see
 
 ## Limitations
 
-- Pre-alpha: `version`, `doctor`, `inventory`, `snapshot`, `compare`,
-  `verify`, and `preflight` do real work; `report` is a stub.
+- Pre-alpha: every command (`version`, `doctor`, `inventory`, `snapshot`,
+  `compare`, `verify`, `preflight`, `report`) does real work now — what's
+  missing is breadth of resource coverage, not depth of implementation.
 - `preflight`'s "destination conflict" check is ID-based only: it flags a
   resource ID that already exists on the destination, but cannot tell you
   *why* it's there or whether that's actually a problem for your specific
@@ -272,6 +320,8 @@ prove amg's comparison engine actually detects real problems — see
   paths may have more expected transformations amg doesn't know about yet.
 - Not tested against every self-hosted Appwrite version — verified so far
   against Appwrite Cloud running server version 2.3.0.
+- `amg report`'s HTML output covers `compare`/`verify` results only — it
+  does not (yet) render `doctor`/`preflight`'s checklist output.
 - Windows/macOS/Linux binaries are not yet published; build from source.
 
 ## Roadmap
@@ -285,7 +335,7 @@ prove amg's comparison engine actually detects real problems — see
    verification)~~ — done. ~~Opt-in TablesDB row content verification
    (`--sample-rows`, addressing the "counts only" limitation)~~ — done.
    Still open: legacy Databases, Users, Functions inventory.
-6. JSON is done; static HTML reporting (`amg report`) still open.
+6. ~~Static HTML reporting (`amg report`)~~ — done, alongside JSON/text.
 7. Fault-injection migration lab + CI.
 8. Cross-platform release binaries.
 

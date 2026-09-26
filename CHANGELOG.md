@@ -7,6 +7,33 @@ follows [Keep a Changelog](https://keepachangelog.com/).
 
 ### Added
 
+- `amg report <result.json>`: renders a saved `compare`/`verify --json`
+  result as text (default), pretty-printed JSON, or a self-contained
+  HTML file — no external stylesheet, script, or network request, safe
+  to open offline. Built on Go's `html/template` (auto-escaping), with a
+  dedicated test proving resource names/messages containing `<script>`
+  tags render as inert escaped text, not executable markup. Every
+  registered `amg` command is now a real implementation — `stub.go` and
+  the "not yet implemented" placeholder are gone.
+  `compare.Result` gained a `SchemaVersion` field (`ResultSchemaVersion`
+  constant) so a future JSON-shape change won't be silently
+  misinterpreted by an older `amg report`.
+  Verified live: piped a real `amg compare --json` result (from a
+  deliberately changed live table) through `amg report --format html`
+  and inspected the output file directly — correct badge, correct
+  findings table, correctly escaped content, zero external references.
+
+### Fixed
+
+- Caught and corrected a real mistake mid-implementation: this stage's
+  first draft of `amg report` was written to `internal/cli/report.go`,
+  silently overwriting the pre-existing `Checklist`/`Status` types that
+  file already held (used by `doctor`/`preflight`) instead of extending
+  them. Caught immediately via a failed build, restored the original
+  file from git, and moved the new command to `report_cmd.go`. No data
+  or history was lost; noted here because it's the kind of mistake that
+  should be visible, not quietly swept under a squashed commit.
+
 - Opt-in TablesDB row content verification (`--sample-rows N` on
   `inventory`/`snapshot`/`verify`), directly addressing the previously
   documented "row content comparison: only counts" limitation.

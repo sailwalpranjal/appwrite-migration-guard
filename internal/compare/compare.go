@@ -70,11 +70,19 @@ const (
 	RuleRowSampleUnverified  = "row_sample_unverified"
 )
 
+// ResultSchemaVersion is bumped whenever Result's JSON shape changes in a
+// way that could break a consumer (e.g. `amg report`) written against an
+// older version — spec section 26: "version the report schema so future
+// changes are manageable." Callers should treat an unrecognized
+// (future) version as unsupported rather than guessing at its shape.
+const ResultSchemaVersion = 1
+
 // Result is the full, deterministic output of one Compare call.
 type Result struct {
-	SourceLabel string    `json:"source_label"`
-	DestLabel   string    `json:"dest_label"`
-	Findings    []Finding `json:"findings"`
+	SchemaVersion int       `json:"schema_version"`
+	SourceLabel   string    `json:"source_label"`
+	DestLabel     string    `json:"dest_label"`
+	Findings      []Finding `json:"findings"`
 }
 
 // Overall returns the worst Severity across all findings, or
@@ -110,7 +118,7 @@ func indexByKey(inv *inventory.Inventory) map[string]inventory.Resource {
 // resource that moved to a different parent is itself reported via
 // RuleParentChanged rather than treated as two unrelated resources).
 func Compare(sourceLabel string, source *inventory.Inventory, destLabel string, dest *inventory.Inventory) *Result {
-	res := &Result{SourceLabel: sourceLabel, DestLabel: destLabel}
+	res := &Result{SchemaVersion: ResultSchemaVersion, SourceLabel: sourceLabel, DestLabel: destLabel}
 
 	srcIdx := indexByKey(source)
 	dstIdx := indexByKey(dest)
