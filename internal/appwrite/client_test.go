@@ -35,6 +35,27 @@ func TestVersion_Success(t *testing.T) {
 	}
 }
 
+// TestVersion_NeverSendsAPIKey is a regression test for a real bug found
+// while testing against a live Appwrite Cloud project: attaching
+// X-Appwrite-Key to a "scope: public" request (like /health/version) makes
+// Appwrite evaluate the call under the key's role and reject it for
+// lacking a "public" scope that no key can ever hold. Version() must
+// never send the key, regardless of whether one is configured.
+func TestVersion_NeverSendsAPIKey(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if got := r.Header.Get("X-Appwrite-Key"); got != "" {
+			t.Fatalf("Version must never send X-Appwrite-Key, got %q", got)
+		}
+		json.NewEncoder(w).Encode(VersionInfo{Version: "2.3.0"})
+	}))
+	defer srv.Close()
+
+	c := New(testEnv(srv.URL))
+	if _, err := c.Version(context.Background()); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
 func TestHealth_AuthHeaders(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if got := r.Header.Get("X-Appwrite-Project"); got != "proj1" {

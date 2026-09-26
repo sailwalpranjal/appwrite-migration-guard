@@ -2,11 +2,12 @@
 
 **Verify Appwrite changes before they become incidents.**
 
-> **Status: early foundation stage.** The CLI skeleton, configuration
-> loading, the Appwrite REST client, and the `version`/`doctor` commands
-> are implemented and tested. `inventory`, `preflight`, `snapshot`,
-> `verify`, `report`, and `compare` are registered commands that
-> currently exit with an explicit "not yet implemented" error — see
+> **Status: early stage, real inventory working.** CLI skeleton,
+> configuration, the Appwrite REST client, `version`, `doctor`, and
+> `inventory` (TablesDB: databases, tables, row counts) are implemented,
+> tested, and verified against a live Appwrite Cloud project. `preflight`,
+> `snapshot`, `verify`, `report`, and `compare` are registered commands
+> that currently exit with an explicit "not yet implemented" error — see
 > [Roadmap](#roadmap). This README describes what exists today, not the
 > finished product.
 
@@ -77,6 +78,16 @@ that the endpoint is reachable (`GET /health/version`, unauthenticated),
 and that the configured API key is valid and has the `health.read` scope
 (`GET /health`). It never mutates anything.
 
+```bash
+./amg inventory
+```
+
+`inventory` lists every TablesDB database and table in the configured
+project, plus a per-table row count (a single cheap `total` lookup, never
+row content). Add `--json` for machine-readable output, `--no-row-counts`
+to skip counts entirely, or `--concurrency N` to change how many Appwrite
+requests run at once (default 4). It never writes to your project.
+
 ## Configuration
 
 amg reads configuration from environment variables (and an optional local
@@ -109,7 +120,8 @@ amg report --format html    # render the result
 ```text
 cmd/amg/            CLI entrypoint (argument parsing, dispatch)
 internal/cli/       Subcommand implementations, PASS/WARN/BLOCK reporting
-internal/appwrite/   Minimal Appwrite REST client (auth, retries, pagination helpers)
+internal/appwrite/   Minimal Appwrite REST client (auth, retries, pagination, TablesDB)
+internal/inventory/  Canonical resource model + bounded-concurrency collector
 internal/config/     Environment-variable configuration loading
 internal/errs/       Typed error taxonomy (connectivity/auth/rate-limit/...)
 internal/version/    Build-time version metadata
@@ -150,7 +162,9 @@ go test ./...
 
 All claims of "supported" or "tested" in this repository are backed by the
 tests in the corresponding package — see `*_test.go` files next to the
-code they test.
+code they test. `inventory` has additionally been run against a live
+Appwrite Cloud project (create database → create table → `amg inventory`
+→ delete both), not just mocked HTTP servers.
 
 ## Migration lab
 
@@ -162,21 +176,28 @@ prove amg's comparison engine actually detects real problems — see
 
 ## Limitations
 
-- Pre-alpha: only `version` and `doctor` do real work today.
-- No content/file hashing, no manifest format, no comparison engine yet.
-- Not tested against every Appwrite resource type or every self-hosted
-  version.
+- Pre-alpha: `version`, `doctor`, and `inventory` do real work; everything
+  else is a stub.
+- Inventory covers TablesDB (databases/tables/row counts) only. Legacy
+  Databases (collections/documents), Storage, Users, Functions, and Sites
+  are explicitly marked `UNSUPPORTED`, not silently skipped — see
+  [docs/migration-semantics.md](docs/migration-semantics.md).
+- Row counts above 5,000 are capped by Appwrite itself and reported as
+  such (`RowCountCapped`), not silently rounded or hidden.
+- No manifest snapshot format, no normalization, no comparison engine yet.
+- Not tested against every self-hosted Appwrite version — verified so far
+  against Appwrite Cloud running server version 2.3.0.
 - Windows/macOS/Linux binaries are not yet published; build from source.
 
 ## Roadmap
 
-1. Inventory: TablesDB (tables/rows), legacy Databases (collections/
-   documents), Storage buckets/files, Users, Functions — with explicit
-   `UNSUPPORTED` marking for anything not yet covered.
-2. Deterministic manifest format + `amg snapshot`.
+1. ~~Inventory: TablesDB (tables/rows)~~ — done. Next: legacy Databases
+   (collections/documents), Storage buckets/files, Users, Functions.
+2. Deterministic manifest format + `amg snapshot` (persist an Inventory
+   run to `.amg/runs/<id>/manifest.json`).
 3. Normalization + comparison engine + `amg compare` (fully offline).
-4. `amg preflight` or `amg verify` wired to the comparison engine.
-5. Terminal, JSON, and static HTML reporting.
+4. `amg preflight` / `amg verify` wired to the comparison engine.
+5. Terminal, JSON, and static HTML reporting for comparisons.
 6. Fault-injection migration lab + CI.
 7. Cross-platform release binaries.
 

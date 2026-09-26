@@ -19,7 +19,6 @@ func notImplemented(name string) func(context.Context, []string, io.Writer, io.W
 }
 
 var (
-	RunInventory = notImplemented("inventory")
 	RunPreflight = notImplemented("preflight")
 	RunSnapshot  = notImplemented("snapshot")
 	RunVerify    = notImplemented("verify")

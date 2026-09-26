@@ -1,0 +1,129 @@
+// Package inventory builds a canonical, deterministic inventory of the
+// resources in an Appwrite project. It depends only on internal/appwrite
+// and internal/errs — it has no knowledge of comparison, manifests, or
+// reporting, which are separate stages.
+package inventory
+
+import (
+	"sort"
+	"time"
+
+	"github.com/sailwalpranjal/appwrite-migration-guard/internal/version"
+)
+
+// ResourceType identifies the kind of Appwrite resource a Resource
+// represents. The set is closed and grows only as amg adds real support
+// for a resource type — see Inventory.Unsupported for types amg knows
+// about but does not yet collect.
+type ResourceType string
+
+const (
+	ResourceDatabase ResourceType = "database"
+	ResourceTable    ResourceType = "table"
+)
+
+// Resource is amg's canonical representation of one Appwrite resource,
+// independent of the raw Appwrite JSON it was built from (spec section
+// 14). Fields that don't apply to a given ResourceType are left zero.
+type Resource struct {
+	Type        ResourceType   `json:"type"`
+	ID          string         `json:"id"`
+	ParentID    string         `json:"parent_id,omitempty"`
+	Name        string         `json:"name,omitempty"`
+	Permissions []string       `json:"permissions,omitempty"`
+	CreatedAt   string         `json:"created_at,omitempty"`
+	UpdatedAt   string         `json:"updated_at,omitempty"`
+	Metadata    map[string]any `json:"metadata,omitempty"`
+
+	// RowCount and RowCountCapped only apply to ResourceTable: RowCount is
+	// the server-reported total (see appwrite.CountRows), and
+	// RowCountCapped is true when Appwrite stopped computing an exact
+	// total at 5000 rows — in which case RowCount is a floor, not an
+	// exact figure.
+	RowCount       int  `json:"row_count,omitempty"`
+	RowCountCapped bool `json:"row_count_capped,omitempty"`
+
+	// CountError records that amg listed this resource but could not
+	// determine its row count (e.g. a transient failure or a scope the
+	// API key lacks). A non-empty CountError means this resource was only
+	// partially verified — spec section 21/25: never claim success when a
+	// check was skipped.
+	CountError string `json:"count_error,omitempty"`
+}
+
+// Inventory is a deterministic snapshot of a project's resources.
+type Inventory struct {
+	Endpoint    string     `json:"endpoint"`
+	ProjectID   string     `json:"project_id"`
+	GeneratedAt time.Time  `json:"generated_at"`
+	ToolVersion string     `json:"tool_version"`
+	Resources   []Resource `json:"resources"`
+
+	// Unsupported lists resource types amg does not yet collect, named
+	// explicitly rather than silently omitted (spec section 15).
+	Unsupported []string `json:"unsupported"`
+}
+
+// unsupportedResourceTypes are Appwrite resource categories amg does not
+// yet inventory. Keeping this list explicit means `amg inventory` can
+// always tell a user "I did not check X" instead of staying silent.
+var unsupportedResourceTypes = []string{
+	"legacy_databases_collections_documents",
+	"storage_buckets_files",
+	"users",
+	"functions",
+	"sites",
+}
+
+// New creates an empty Inventory stamped with the current tool version
+// and generation time.
+func New(endpoint, projectID string) *Inventory {
+	unsupported := make([]string, len(unsupportedResourceTypes))
+	copy(unsupported, unsupportedResourceTypes)
+	return &Inventory{
+		Endpoint:    endpoint,
+		ProjectID:   projectID,
+		GeneratedAt: time.Now().UTC(),
+		ToolVersion: version.Version,
+		Unsupported: unsupported,
+	}
+}
+
+// Sort orders Resources deterministically by (Type, ParentID, ID), so two
+// runs against an unchanged project produce byte-identical JSON (spec
+// section 14: "the manifest must be deterministic... do not rely on API
+// response ordering").
+func (inv *Inventory) Sort() {
+	sort.Slice(inv.Resources, func(i, j int) bool {
+		a, b := inv.Resources[i], inv.Resources[j]
+		if a.Type != b.Type {
+			return a.Type < b.Type
+		}
+		if a.ParentID != b.ParentID {
+			return a.ParentID < b.ParentID
+		}
+		return a.ID < b.ID
+	})
+}
+
+// CountByType returns the number of resources of each type, useful for
+// terminal summaries.
+func (inv *Inventory) CountByType() map[ResourceType]int {
+	counts := make(map[ResourceType]int)
+	for _, r := range inv.Resources {
+		counts[r.Type]++
+	}
+	return counts
+}
+
+// PartiallyVerified reports whether any resource has a non-empty
+// CountError, meaning this inventory is incomplete despite not having
+// failed outright.
+func (inv *Inventory) PartiallyVerified() bool {
+	for _, r := range inv.Resources {
+		if r.CountError != "" {
+			return true
+		}
+	}
+	return false
+}

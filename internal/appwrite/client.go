@@ -95,6 +95,18 @@ type apiError struct {
 // if non-nil, is marshaled as JSON. The decoded JSON response body is
 // written into out (if non-nil).
 func (c *Client) request(ctx context.Context, op, method, path string, query url.Values, body any, out any) error {
+	return c.requestAuth(ctx, op, method, path, query, body, out, true)
+}
+
+// requestAuth is request with control over whether the API key header is
+// sent. This matters for endpoints labeled scope "public" in Appwrite's
+// source (e.g. GET /health/version): sending an API key on such a request
+// is not simply ignored — verified against a live Appwrite Cloud project,
+// attaching X-Appwrite-Key makes Appwrite evaluate the request under the
+// key's "applications" role and reject it for lacking a literal "public"
+// scope, which no API key can ever be granted. Public endpoints must
+// therefore be called with no key at all.
+func (c *Client) requestAuth(ctx context.Context, op, method, path string, query url.Values, body any, out any, sendKey bool) error {
 	var bodyBytes []byte
 	if body != nil {
 		b, err := json.Marshal(body)
@@ -115,7 +127,7 @@ func (c *Client) request(ctx context.Context, op, method, path string, query url
 			}
 		}
 
-		err := c.doOnce(ctx, op, method, path, query, bodyBytes, out)
+		err := c.doOnce(ctx, op, method, path, query, bodyBytes, out, sendKey)
 		if err == nil {
 			return nil
 		}
@@ -127,7 +139,7 @@ func (c *Client) request(ctx context.Context, op, method, path string, query url
 	return lastErr
 }
 
-func (c *Client) doOnce(ctx context.Context, op, method, path string, query url.Values, bodyBytes []byte, out any) error {
+func (c *Client) doOnce(ctx context.Context, op, method, path string, query url.Values, bodyBytes []byte, out any, sendKey bool) error {
 	u := strings.TrimRight(c.env.Endpoint, "/") + path
 	if len(query) > 0 {
 		u += "?" + query.Encode()
@@ -143,7 +155,7 @@ func (c *Client) doOnce(ctx context.Context, op, method, path string, query url.
 		return errs.New(errs.KindConfiguration, op, fmt.Errorf("build request: %w", err))
 	}
 	req.Header.Set("X-Appwrite-Project", c.env.ProjectID)
-	if c.env.APIKey != "" {
+	if sendKey && c.env.APIKey != "" {
 		req.Header.Set("X-Appwrite-Key", c.env.APIKey)
 	}
 	req.Header.Set("User-Agent", c.userAgent)
@@ -165,6 +177,9 @@ func (c *Client) doOnce(ctx context.Context, op, method, path string, query url.
 
 	payload, readErr := io.ReadAll(resp.Body)
 	if readErr != nil {
+		if ctx.Err() != nil {
+			return errs.New(errs.KindTimeout, op, ctx.Err()).WithRetryable(false)
+		}
 		return errs.New(errs.KindInvalidResponse, op, fmt.Errorf("read response body: %w", readErr))
 	}
 
@@ -251,10 +266,12 @@ type VersionInfo struct {
 	Version string `json:"version"`
 }
 
-// Version calls GET /v1/health/version, a public (unauthenticated) endpoint
-// that confirms the target is an Appwrite server and reports its version.
+// Version calls GET /v1/health/version, a public endpoint that confirms
+// the target is an Appwrite server and reports its version. It is called
+// without the API key (see requestAuth's doc comment for why) — an
+// invalid or absent key must not affect this reachability check.
 func (c *Client) Version(ctx context.Context) (VersionInfo, error) {
 	var out VersionInfo
-	err := c.request(ctx, "appwrite.Version", http.MethodGet, "/health/version", nil, nil, &out)
+	err := c.requestAuth(ctx, "appwrite.Version", http.MethodGet, "/health/version", nil, nil, &out, false)
 	return out, err
 }
