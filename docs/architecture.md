@@ -18,14 +18,21 @@ SIGTERM), and maps the command's result to a process exit code.
   `Checklist.Overall()` is BLOCK for an empty checklist by design: an
   incomplete run must never render as success.
 - `version.go`, `doctor.go`, `inventory.go`, `snapshot.go`, `compare.go`,
-  `verify.go`, `preflight.go` — real implementations. `doctor.go` also
-  holds `explainAuthError`, a shared helper both it and `preflight.go`
-  use to tell "API key rejected" apart from "API key missing a scope"
-  instead of a bare error string.
+  `verify.go`, `preflight.go`, `report_cmd.go` — real implementations.
+  `doctor.go` also holds `explainAuthError`, a shared helper both it and
+  `preflight.go` use to tell "API key rejected" apart from "API key
+  missing a scope" instead of a bare error string.
 - `compare_report.go` — shared terminal renderer for `compare.Result`,
-  used by both `compare` and `verify` so their output stays identical.
-- `stub.go` — `report` currently returns an explicit "not implemented"
-  BLOCK rather than silently doing nothing.
+  used by `compare`, `verify`, and `report --format text` so their
+  output stays identical.
+- `report_cmd.go` — `amg report`: reads a `compare.Result` JSON file (as
+  written by `compare --json`/`verify --json`) and re-renders it as
+  text, JSON, or HTML (via `internal/report`). Rejects a result whose
+  `SchemaVersion` is newer than this build supports, rather than
+  guessing at an unknown shape.
+
+There is no more `stub.go` — every registered command is a real
+implementation as of this stage.
 
 ### `internal/appwrite`
 
@@ -105,6 +112,22 @@ kind of matching one level down, by row ID within a table's sampled set —
 see its doc comment for why missing/unexpected sampled rows are WARN
 (sampling is inherently partial) while a digest or permission mismatch
 *within* the sample is BLOCK (that's a confirmed difference).
+`Result.SchemaVersion` (`ResultSchemaVersion` constant) supports future
+JSON-shape changes without breaking older saved results — see
+`internal/report`/`report_cmd.go`.
+
+### `internal/report`
+
+`WriteHTML(w, *compare.Result)` renders a single self-contained HTML
+document via Go's `html/template` (auto-escaping every dynamic value —
+never `text/template`, and nothing here ever wraps Finding data in
+`template.HTML`). No external stylesheet, script, font, or image
+reference: CSS is inlined in a `<style>` block, and both a light and dark
+palette are defined so the page respects the viewer's OS preference. The
+findings table uses scoped `<th>` headers for screen readers, and
+severity is always shown as literal text (`PASS`/`WARN`/`BLOCK`), color
+only ever a secondary cue. See `html_test.go` for the XSS-escaping and
+no-external-resource regression tests this design is checked against.
 
 ### `internal/config`
 
@@ -132,6 +155,6 @@ release build time; defaults to `"dev"` for local builds.
 
 No inventory (and therefore no comparison) of legacy Databases
 (collections/documents)/Users/Functions/Sites, no exhaustive (non-sampled)
-row content comparison, no static HTML report renderer, no
-fault-injection migration lab. These are staged work — see the README
-roadmap.
+row content comparison, no fault-injection migration lab, no persistent
+run history beyond the manifest/result files a user explicitly saves.
+These are staged work — see the README roadmap.

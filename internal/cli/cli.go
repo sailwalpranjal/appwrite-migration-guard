@@ -33,7 +33,7 @@ var Commands = []Command{
 	{Name: "preflight", Summary: "Check source/destination compatibility before a migration", Run: RunPreflight},
 	{Name: "snapshot", Summary: "Write a deterministic manifest of a project's resources", Run: RunSnapshot},
 	{Name: "verify", Summary: "Compare source, expected, and destination state after a migration", Run: RunVerify},
-	{Name: "report", Summary: "Render a run's results as terminal/JSON/HTML output", Run: RunReport},
+	{Name: "report", Summary: "Render a saved compare/verify result as text, JSON, or HTML", Run: RunReport},
 	{Name: "compare", Summary: "Compare two local manifests without any network access", Run: RunCompare},
 }
 
