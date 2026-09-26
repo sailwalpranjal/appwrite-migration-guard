@@ -18,7 +18,4 @@ func notImplemented(name string) func(context.Context, []string, io.Writer, io.W
 	}
 }
 
-var (
-	RunPreflight = notImplemented("preflight")
-	RunReport    = notImplemented("report")
-)
+var RunReport = notImplemented("report")
