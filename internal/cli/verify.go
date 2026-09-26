@@ -26,6 +26,7 @@ func RunVerify(ctx context.Context, args []string, stdout, stderr io.Writer) int
 	fs.SetOutput(stderr)
 	jsonOut := fs.Bool("json", false, "print the comparison result as JSON instead of a terminal summary")
 	noCounts := fs.Bool("no-row-counts", false, "skip per-table row counts (metadata only)")
+	sampleRows := fs.Int("sample-rows", 0, "fetch up to N rows per table on both sides and compare content digests; 0 disables sampling (default)")
 	concurrency := fs.Int("concurrency", inventory.DefaultConcurrency, "maximum concurrent Appwrite requests per side")
 	if err := fs.Parse(args); err != nil {
 		return ExitBlock
@@ -46,7 +47,7 @@ func RunVerify(ctx context.Context, args []string, stdout, stderr io.Writer) int
 	runCtx, cancel := context.WithTimeout(ctx, verifyTimeout)
 	defer cancel()
 
-	opts := inventory.Options{Concurrency: *concurrency, CountRows: !*noCounts}
+	opts := inventory.Options{Concurrency: *concurrency, CountRows: !*noCounts, SampleRows: *sampleRows}
 
 	var srcInv, dstInv *inventory.Inventory
 	var srcErr, dstErr error

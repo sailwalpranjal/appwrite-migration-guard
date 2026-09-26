@@ -52,17 +52,22 @@ type Finding struct {
 // strings scattered through compareMatched) is what makes each rule
 // individually testable and documentable — see docs/comparison-model.md.
 const (
-	RuleMissingResource     = "missing_resource"
-	RuleUnexpectedResource  = "unexpected_resource"
-	RuleParentChanged       = "parent_changed"
-	RuleNameChanged         = "name_changed"
-	RulePermissionChanged   = "permission_changed"
-	RuleConfigChanged       = "config_changed"
-	RuleContentChanged      = "content_changed"
-	RuleContentUnverified   = "content_unverified"
-	RuleRowCountMismatch    = "row_count_mismatch"
-	RuleRowCountUnconfirmed = "row_count_unconfirmed"
-	RuleRowCountUnverified  = "row_count_unverified"
+	RuleMissingResource      = "missing_resource"
+	RuleUnexpectedResource   = "unexpected_resource"
+	RuleParentChanged        = "parent_changed"
+	RuleNameChanged          = "name_changed"
+	RulePermissionChanged    = "permission_changed"
+	RuleConfigChanged        = "config_changed"
+	RuleContentChanged       = "content_changed"
+	RuleContentUnverified    = "content_unverified"
+	RuleRowCountMismatch     = "row_count_mismatch"
+	RuleRowCountUnconfirmed  = "row_count_unconfirmed"
+	RuleRowCountUnverified   = "row_count_unverified"
+	RuleRowContentChanged    = "row_content_changed"
+	RuleRowPermissionChanged = "row_permission_changed"
+	RuleRowSampleMissing     = "row_sample_missing"
+	RuleRowSampleUnexpected  = "row_sample_unexpected"
+	RuleRowSampleUnverified  = "row_sample_unverified"
 )
 
 // Result is the full, deterministic output of one Compare call.
@@ -177,6 +182,7 @@ func compareMatched(s, d inventory.Resource) []Finding {
 	switch s.Type {
 	case inventory.ResourceTable:
 		findings = append(findings, compareRowCounts(s, d)...)
+		findings = append(findings, compareRowSamples(s, d)...)
 	case inventory.ResourceFile:
 		switch {
 		case s.ContentDigest == "" || d.ContentDigest == "":
@@ -226,6 +232,83 @@ func compareRowCounts(s, d inventory.Resource) []Finding {
 		base.Message = fmt.Sprintf("table %q row count differs: source=%d dest=%d", s.ID, s.RowCount, d.RowCount)
 		return []Finding{base}
 	}
+}
+
+// compareRowSamples compares the bounded row-content samples attached to
+// two matched table resources (see inventory.Resource.RowSamples). This
+// is a best-effort check: a row outside the sampled window is invisible
+// to it, so a missing/unexpected sampled row ID is WARN, not BLOCK — it
+// means "this specific check couldn't confirm the row," not "the row is
+// definitely gone." A confirmed digest or permission difference *within*
+// the sample is a real, BLOCK-level finding.
+func compareRowSamples(s, d inventory.Resource) []Finding {
+	table := Finding{ResourceType: s.Type, ResourceID: s.ID, ParentID: s.ParentID}
+
+	if s.SampleError != "" || d.SampleError != "" {
+		f := table
+		f.Severity = SeverityWarn
+		f.Rule = RuleRowSampleUnverified
+		f.Message = fmt.Sprintf("table %q row sampling could not be verified on both sides (source_error=%q dest_error=%q)", s.ID, s.SampleError, d.SampleError)
+		return []Finding{f}
+	}
+	if len(s.RowSamples) == 0 && len(d.RowSamples) == 0 {
+		return nil
+	}
+
+	srcByID := make(map[string]inventory.RowSample, len(s.RowSamples))
+	srcIDs := make([]string, 0, len(s.RowSamples))
+	for _, rs := range s.RowSamples {
+		srcByID[rs.ID] = rs
+		srcIDs = append(srcIDs, rs.ID)
+	}
+	sort.Strings(srcIDs)
+
+	dstByID := make(map[string]inventory.RowSample, len(d.RowSamples))
+	dstIDs := make([]string, 0, len(d.RowSamples))
+	for _, rs := range d.RowSamples {
+		dstByID[rs.ID] = rs
+		dstIDs = append(dstIDs, rs.ID)
+	}
+	sort.Strings(dstIDs)
+
+	var findings []Finding
+	for _, id := range srcIDs {
+		sr := srcByID[id]
+		dr, ok := dstByID[id]
+		if !ok {
+			f := table
+			f.Severity = SeverityWarn
+			f.Rule = RuleRowSampleMissing
+			f.Message = fmt.Sprintf("table %q: sampled row %q was not found on the destination side (outside the sampled window, or genuinely missing)", s.ID, id)
+			findings = append(findings, f)
+			continue
+		}
+		if !equalStringSets(sr.Permissions, dr.Permissions) {
+			f := table
+			f.Severity = SeverityBlock
+			f.Rule = RuleRowPermissionChanged
+			f.Message = fmt.Sprintf("table %q: row %q permissions changed: %v -> %v", s.ID, id, sr.Permissions, dr.Permissions)
+			findings = append(findings, f)
+		}
+		if sr.Digest != dr.Digest {
+			f := table
+			f.Severity = SeverityBlock
+			f.Rule = RuleRowContentChanged
+			f.Message = fmt.Sprintf("table %q: row %q content changed (digest %s -> %s)", s.ID, id, sr.Digest, dr.Digest)
+			findings = append(findings, f)
+		}
+	}
+	for _, id := range dstIDs {
+		if _, ok := srcByID[id]; !ok {
+			f := table
+			f.Severity = SeverityWarn
+			f.Rule = RuleRowSampleUnexpected
+			f.Message = fmt.Sprintf("table %q: row %q found on the destination side but was not in the source sample", s.ID, id)
+			findings = append(findings, f)
+		}
+	}
+
+	return findings
 }
 
 func equalStringSets(a, b []string) bool {

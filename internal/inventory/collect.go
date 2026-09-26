@@ -22,6 +22,13 @@ type Options struct {
 	// appwrite.Client.CountRows. Disable for very large projects where
 	// even this is undesirable.
 	CountRows bool
+	// SampleRows, when > 0, fetches up to this many rows per table
+	// (ordered by $id, capped at appwrite's maxSampleRows) and records a
+	// content digest for each instead of the actual content — see
+	// appwrite.Client.SampleRows and docs/migration-semantics.md. Zero
+	// (the default) disables sampling entirely: unlike row counts, this
+	// reads real row data, so it is opt-in, not just cheap-by-default.
+	SampleRows int
 }
 
 func (o Options) withDefaults() Options {
@@ -110,23 +117,44 @@ func collectTablesDB(ctx context.Context, client *appwrite.Client, inv *Inventor
 		}
 	}
 
-	if opts.CountRows {
-		tableIdx := make([]int, 0, len(inv.Resources))
-		for i, r := range inv.Resources {
-			if r.Type == ResourceTable {
-				tableIdx = append(tableIdx, i)
-			}
+	tableIdx := make([]int, 0, len(inv.Resources))
+	for i, r := range inv.Resources {
+		if r.Type == ResourceTable {
+			tableIdx = append(tableIdx, i)
 		}
+	}
+
+	// CountRows and SampleRows are independent per-table Appwrite calls,
+	// so both run inside the same runBestEffort pass — one goroutine per
+	// table issues whichever of the two are enabled, back to back —
+	// instead of two full sequential passes over every table, which would
+	// roughly double wall-clock time for no benefit.
+	if opts.CountRows || opts.SampleRows > 0 {
 		runBestEffort(ctx, opts.Concurrency, len(tableIdx), func(ctx context.Context, k int) {
 			idx := tableIdx[k]
 			r := &inv.Resources[idx]
-			count, capped, err := client.CountRows(ctx, r.ParentID, r.ID)
-			if err != nil {
-				r.CountError = err.Error()
-				return
+
+			if opts.CountRows {
+				count, capped, err := client.CountRows(ctx, r.ParentID, r.ID)
+				if err != nil {
+					r.CountError = err.Error()
+				} else {
+					r.RowCount = count
+					r.RowCountCapped = capped
+				}
 			}
-			r.RowCount = count
-			r.RowCountCapped = capped
+
+			if opts.SampleRows > 0 {
+				samples, err := client.SampleRows(ctx, r.ParentID, r.ID, opts.SampleRows)
+				if err != nil {
+					r.SampleError = err.Error()
+					return
+				}
+				r.RowSamples = make([]RowSample, len(samples))
+				for i, s := range samples {
+					r.RowSamples[i] = RowSample{ID: s.ID, Permissions: s.Permissions, Digest: s.Digest}
+				}
+			}
 		})
 	}
 

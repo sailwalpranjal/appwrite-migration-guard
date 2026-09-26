@@ -48,6 +48,12 @@ A narrow REST client, not a general SDK:
   (`Limit(1)`) and reads the server-computed `total`, never row content —
   see docs/migration-semantics.md for the 5,000-row cap this is subject
   to.
+- `rowsample_test.go` (test) / `SampleRows` in `tablesdb.go` — opt-in row
+  content fingerprinting: fetches up to `maxSampleRows` (500) rows
+  ordered by `$id`, strips every `$`-prefixed (Appwrite-managed) field,
+  and SHA-256 hashes what's left. Row content is discarded immediately
+  after hashing — only `RowSample{ID, Permissions, Digest}` is ever
+  returned or persisted.
 - `storage.go` — Storage (buckets/files) methods: `ListBuckets`,
   `ListFiles`. `File.Signature` is Appwrite's own server-computed MD5 of
   file content, letting amg verify file integrity by comparing a string
@@ -67,9 +73,11 @@ bug found by testing against a live Appwrite Cloud project, documented on
   unchanged project produce identical output regardless of API response
   ordering.
 - `collect.go` — `Collect()` lists databases, then (bounded-concurrency,
-  fail-fast) tables per database, then (bounded-concurrency, best-effort)
-  a row count per table. A table whose row count fails is still included
-  in the inventory with `CountError` set, rather than being dropped or
+  fail-fast) tables per database, then storage buckets/files the same
+  way, then (bounded-concurrency, best-effort, one pass) a row count
+  and/or row-content sample per table depending on `Options`. A table
+  whose row count or sampling fails is still included in the inventory
+  with `CountError`/`SampleError` set, rather than being dropped or
   aborting the whole run.
 - `concurrency.go` — two small worker-pool helpers (`runFailFast`,
   `runBestEffort`), not a generic executor framework — see the spec's
@@ -92,7 +100,11 @@ function). See docs/comparison-model.md for the full rule table. Resource
 matching is by `(Type, ID)`, not list position or parent, so a resource
 that moved to a different parent is still recognized as the same resource
 (and reported via `parent_changed`) rather than showing up as an
-unrelated missing+unexpected pair.
+unrelated missing+unexpected pair. `compareRowSamples` applies the same
+kind of matching one level down, by row ID within a table's sampled set —
+see its doc comment for why missing/unexpected sampled rows are WARN
+(sampling is inherently partial) while a digest or permission mismatch
+*within* the sample is BLOCK (that's a confirmed difference).
 
 ### `internal/config`
 
@@ -119,8 +131,7 @@ release build time; defaults to `"dev"` for local builds.
 ## What is deliberately not here yet
 
 No inventory (and therefore no comparison) of legacy Databases
-(collections/documents)/Users/Functions/Sites, no row *content*
-comparison (counts only — files get content verification via their MD5
-signature, but TablesDB rows do not), no static HTML report renderer, no
+(collections/documents)/Users/Functions/Sites, no exhaustive (non-sampled)
+row content comparison, no static HTML report renderer, no
 fault-injection migration lab. These are staged work — see the README
 roadmap.

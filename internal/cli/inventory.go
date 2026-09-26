@@ -25,6 +25,7 @@ func RunInventory(ctx context.Context, args []string, stdout, stderr io.Writer) 
 	fs.SetOutput(stderr)
 	jsonOut := fs.Bool("json", false, "print the inventory as JSON instead of a terminal summary")
 	noCounts := fs.Bool("no-row-counts", false, "skip per-table row counts (metadata only)")
+	sampleRows := fs.Int("sample-rows", 0, "fetch up to N rows per table (ordered by $id) and record a content digest for each; 0 disables sampling (default). This reads real row data — opt in deliberately.")
 	concurrency := fs.Int("concurrency", inventory.DefaultConcurrency, "maximum concurrent Appwrite requests")
 	if err := fs.Parse(args); err != nil {
 		return ExitBlock
@@ -44,6 +45,7 @@ func RunInventory(ctx context.Context, args []string, stdout, stderr io.Writer) 
 	inv, err := inventory.Collect(runCtx, client, env.Endpoint, env.ProjectID, inventory.Options{
 		Concurrency: *concurrency,
 		CountRows:   !*noCounts,
+		SampleRows:  *sampleRows,
 	})
 	if err != nil {
 		fmt.Fprintln(stderr, "amg inventory:", err.Error())
@@ -100,6 +102,11 @@ func writeInventorySummary(w io.Writer, inv *inventory.Inventory) {
 			} else {
 				fmt.Fprintf(w, "  %-5s table   %-22s %-30s %s\n", StatusPass, r.ID, r.Name, rows)
 			}
+			if r.SampleError != "" {
+				fmt.Fprintf(w, "         %-5s row sample unavailable: %s\n", StatusWarn, r.SampleError)
+			} else if len(r.RowSamples) > 0 {
+				fmt.Fprintf(w, "         %-5s %d row(s) sampled and fingerprinted\n", StatusPass, len(r.RowSamples))
+			}
 		case inventory.ResourceBucket:
 			fmt.Fprintf(w, "bucket    %-24s %s\n", r.ID, r.Name)
 		case inventory.ResourceFile:
@@ -116,9 +123,35 @@ func writeInventorySummary(w io.Writer, inv *inventory.Inventory) {
 	}
 
 	fmt.Fprintln(w)
-	if inv.PartiallyVerified() {
-		fmt.Fprintf(w, "Result: %s (some row counts were not verified)\n", StatusWarn)
+	if reason := partialVerificationReason(inv); reason != "" {
+		fmt.Fprintf(w, "Result: %s (%s)\n", StatusWarn, reason)
 	} else {
 		fmt.Fprintf(w, "Result: %s\n", StatusPass)
+	}
+}
+
+// partialVerificationReason describes *what* was only partially verified
+// — a row-count failure and a row-sampling failure are different
+// problems with different causes, so the summary must not claim one
+// happened when it was really the other.
+func partialVerificationReason(inv *inventory.Inventory) string {
+	var countFailed, sampleFailed bool
+	for _, r := range inv.Resources {
+		if r.CountError != "" {
+			countFailed = true
+		}
+		if r.SampleError != "" {
+			sampleFailed = true
+		}
+	}
+	switch {
+	case countFailed && sampleFailed:
+		return "some row counts and row samples were not verified"
+	case countFailed:
+		return "some row counts were not verified"
+	case sampleFailed:
+		return "some row samples were not verified"
+	default:
+		return ""
 	}
 }

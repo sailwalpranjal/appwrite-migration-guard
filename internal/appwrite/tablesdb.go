@@ -2,8 +2,14 @@ package appwrite
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"net/http"
+	"strings"
+
+	"github.com/sailwalpranjal/appwrite-migration-guard/internal/errs"
 )
 
 // TablesDB is Appwrite's current database API (tables/rows), which
@@ -118,4 +124,97 @@ func (c *Client) CountRows(ctx context.Context, databaseID, tableID string) (cou
 		return 0, false, err
 	}
 	return out.Total, out.Total >= rowCountCap, nil
+}
+
+// maxSampleRows bounds SampleRows regardless of what a caller asks for,
+// so a misconfigured --sample-rows value can't turn into an accidental
+// full-table download.
+const maxSampleRows = 500
+
+// RowSample is a bounded, non-content-preserving fingerprint of one row:
+// its ID, its own row-level permissions (Row.php has its own
+// $permissions independent of the table's), and a SHA-256 digest of its
+// user-defined column values. amg never stores or transmits the actual
+// row content anywhere — see rowDigest.
+type RowSample struct {
+	ID          string
+	Permissions []string
+	Digest      string
+}
+
+// SampleRows fetches up to limit rows (capped at maxSampleRows) from
+// table, ordered by $id ascending for determinism — the same N rows are
+// sampled on every call against an unchanged table, which is what makes
+// comparing two samples meaningful. It returns per-row fingerprints only;
+// row content is discarded immediately after hashing and never appears in
+// the returned value, in memory beyond this call, or in any manifest.
+//
+// This is a best-effort content check, not exhaustive verification — a
+// row outside the sampled window changing is not detected. See
+// docs/migration-semantics.md.
+func (c *Client) SampleRows(ctx context.Context, databaseID, tableID string, limit int) ([]RowSample, error) {
+	if limit <= 0 {
+		return nil, nil
+	}
+	if limit > maxSampleRows {
+		limit = maxSampleRows
+	}
+
+	op := fmt.Sprintf("appwrite.SampleRows(%s/%s)", databaseID, tableID)
+	path := fmt.Sprintf("/tablesdb/%s/tables/%s/rows", databaseID, tableID)
+	var out struct {
+		Rows []map[string]json.RawMessage `json:"rows"`
+	}
+	queries := []string{Limit(limit), OrderAsc("$id")}
+	if err := c.request(ctx, op, http.MethodGet, path, QueryParams(queries...), nil, &out); err != nil {
+		return nil, err
+	}
+
+	samples := make([]RowSample, 0, len(out.Rows))
+	for _, row := range out.Rows {
+		s, err := rowSampleFrom(row)
+		if err != nil {
+			return nil, errs.New(errs.KindInvalidResponse, op, err)
+		}
+		samples = append(samples, s)
+	}
+	return samples, nil
+}
+
+// rowSampleFrom fingerprints one raw row without retaining its content.
+// Every Appwrite-managed field on a row is prefixed with "$" ($id,
+// $sequence, $tableId, $databaseId, $createdAt, $updatedAt,
+// $permissions — confirmed across every Model/*.php this package cites),
+// so excluding "$"-prefixed keys reliably isolates the user-defined
+// column values the digest is computed over.
+func rowSampleFrom(row map[string]json.RawMessage) (RowSample, error) {
+	var s RowSample
+	if raw, ok := row["$id"]; ok {
+		if err := json.Unmarshal(raw, &s.ID); err != nil {
+			return RowSample{}, fmt.Errorf("decode $id: %w", err)
+		}
+	}
+	if raw, ok := row["$permissions"]; ok {
+		if err := json.Unmarshal(raw, &s.Permissions); err != nil {
+			return RowSample{}, fmt.Errorf("decode $permissions: %w", err)
+		}
+	}
+
+	content := make(map[string]json.RawMessage, len(row))
+	for k, v := range row {
+		if strings.HasPrefix(k, "$") {
+			continue
+		}
+		content[k] = v
+	}
+	// encoding/json sorts map keys when marshaling, which is what makes
+	// this digest deterministic regardless of the order Appwrite returned
+	// fields in.
+	b, err := json.Marshal(content)
+	if err != nil {
+		return RowSample{}, fmt.Errorf("encode row content for hashing: %w", err)
+	}
+	sum := sha256.Sum256(b)
+	s.Digest = hex.EncodeToString(sum[:])
+	return s, nil
 }
