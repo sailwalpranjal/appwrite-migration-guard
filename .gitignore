@@ -1,0 +1,24 @@
+# Build artifacts
+/amg
+/amg.exe
+/dist/
+/bin/
+
+# Local environment
+.env
+.env.*
+!.env.example
+
+# Local run data (manifests may contain resource metadata; never commit)
+/.amg/
+
+# Go
+*.test
+*.out
+coverage.txt
+
+# OS/editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
