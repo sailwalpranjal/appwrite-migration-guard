@@ -45,6 +45,10 @@ A narrow REST client, not a general SDK:
   (`Limit(1)`) and reads the server-computed `total`, never row content —
   see docs/migration-semantics.md for the 5,000-row cap this is subject
   to.
+- `storage.go` — Storage (buckets/files) methods: `ListBuckets`,
+  `ListFiles`. `File.Signature` is Appwrite's own server-computed MD5 of
+  file content, letting amg verify file integrity by comparing a string
+  instead of ever downloading file bytes — see docs/migration-semantics.md.
 
 Every endpoint path and header this package uses is annotated with the
 exact file in `github.com/appwrite/appwrite` (tag `2.3.0`) it was verified
@@ -112,7 +116,8 @@ release build time; defaults to `"dev"` for local builds.
 ## What is deliberately not here yet
 
 No inventory (and therefore no comparison) of legacy Databases
-(collections/documents)/Storage/Users/Functions/Sites, no row *content*
-comparison (counts only), no `amg preflight`, no static HTML report
-renderer, no fault-injection migration lab. These are staged work — see
-the README roadmap.
+(collections/documents)/Users/Functions/Sites, no row *content*
+comparison (counts only — files get content verification via their MD5
+signature, but TablesDB rows do not), no `amg preflight`, no static HTML
+report renderer, no fault-injection migration lab. These are staged work
+— see the README roadmap.

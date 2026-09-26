@@ -16,9 +16,10 @@ import (
 const inventoryTimeout = 2 * time.Minute
 
 // RunInventory implements `amg inventory`: it connects to the single
-// APPWRITE_* target environment and inventories its TablesDB databases,
-// tables, and (by default) per-table row counts. It never writes to the
-// Appwrite project.
+// APPWRITE_* target environment and inventories its TablesDB databases
+// and tables (with, by default, a per-table row count), plus its Storage
+// buckets and files (including each file's MD5 content signature). It
+// never writes to the Appwrite project and never downloads file content.
 func RunInventory(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 	fs := flag.NewFlagSet("inventory", flag.ContinueOnError)
 	fs.SetOutput(stderr)
@@ -81,6 +82,8 @@ func writeInventorySummary(w io.Writer, inv *inventory.Inventory) {
 	counts := inv.CountByType()
 	fmt.Fprintf(w, "%-5s %d database(s)\n", StatusPass, counts[inventory.ResourceDatabase])
 	fmt.Fprintf(w, "%-5s %d table(s)\n", StatusPass, counts[inventory.ResourceTable])
+	fmt.Fprintf(w, "%-5s %d bucket(s)\n", StatusPass, counts[inventory.ResourceBucket])
+	fmt.Fprintf(w, "%-5s %d file(s)\n", StatusPass, counts[inventory.ResourceFile])
 	fmt.Fprintln(w)
 
 	for _, r := range inv.Resources {
@@ -97,6 +100,10 @@ func writeInventorySummary(w io.Writer, inv *inventory.Inventory) {
 			} else {
 				fmt.Fprintf(w, "  %-5s table   %-22s %-30s %s\n", StatusPass, r.ID, r.Name, rows)
 			}
+		case inventory.ResourceBucket:
+			fmt.Fprintf(w, "bucket    %-24s %s\n", r.ID, r.Name)
+		case inventory.ResourceFile:
+			fmt.Fprintf(w, "  %-5s file    %-22s %-30s md5:%s\n", StatusPass, r.ID, r.Name, r.ContentDigest)
 		}
 	}
 

@@ -58,6 +58,8 @@ const (
 	RuleNameChanged         = "name_changed"
 	RulePermissionChanged   = "permission_changed"
 	RuleConfigChanged       = "config_changed"
+	RuleContentChanged      = "content_changed"
+	RuleContentUnverified   = "content_unverified"
 	RuleRowCountMismatch    = "row_count_mismatch"
 	RuleRowCountUnconfirmed = "row_count_unconfirmed"
 	RuleRowCountUnverified  = "row_count_unverified"
@@ -164,18 +166,39 @@ func compareMatched(s, d inventory.Resource) []Finding {
 	if !equalStringSets(s.Permissions, d.Permissions) {
 		add(SeverityBlock, RulePermissionChanged, fmt.Sprintf("%s %q permissions changed: %v -> %v", s.Type, s.ID, s.Permissions, d.Permissions))
 	}
-	for _, mk := range []string{"enabled", "row_security", "type", "status"} {
+	for _, mk := range comparedMetadataKeys[s.Type] {
 		sv, sok := s.Metadata[mk]
 		dv, dok := d.Metadata[mk]
 		if sok != dok || fmt.Sprint(sv) != fmt.Sprint(dv) {
 			add(SeverityBlock, RuleConfigChanged, fmt.Sprintf("%s %q metadata %q changed: %v -> %v", s.Type, s.ID, mk, sv, dv))
 		}
 	}
-	if s.Type == inventory.ResourceTable {
+
+	switch s.Type {
+	case inventory.ResourceTable:
 		findings = append(findings, compareRowCounts(s, d)...)
+	case inventory.ResourceFile:
+		switch {
+		case s.ContentDigest == "" || d.ContentDigest == "":
+			add(SeverityWarn, RuleContentUnverified, fmt.Sprintf("file %q content signature missing on at least one side (source=%q dest=%q); content could not be verified", s.ID, s.ContentDigest, d.ContentDigest))
+		case s.ContentDigest != d.ContentDigest:
+			add(SeverityBlock, RuleContentChanged, fmt.Sprintf("file %q content signature changed: %s -> %s", s.ID, s.ContentDigest, d.ContentDigest))
+		}
 	}
 
 	return findings
+}
+
+// comparedMetadataKeys lists, per ResourceType, which inventory.Resource
+// Metadata keys are treated as configuration drift (RuleConfigChanged)
+// rather than ignored. Fields not listed here (e.g. a table's
+// bytes_used, which fluctuates independently of anything a migration
+// controls) are deliberately never compared.
+var comparedMetadataKeys = map[inventory.ResourceType][]string{
+	inventory.ResourceDatabase: {"enabled", "type", "status"},
+	inventory.ResourceTable:    {"enabled", "row_security"},
+	inventory.ResourceBucket:   {"enabled", "file_security", "maximum_file_size", "allowed_file_extensions", "compression", "encryption", "antivirus"},
+	inventory.ResourceFile:     {"mime_type"},
 }
 
 func compareRowCounts(s, d inventory.Resource) []Finding {

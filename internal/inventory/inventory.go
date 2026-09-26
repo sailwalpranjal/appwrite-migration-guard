@@ -20,6 +20,8 @@ type ResourceType string
 const (
 	ResourceDatabase ResourceType = "database"
 	ResourceTable    ResourceType = "table"
+	ResourceBucket   ResourceType = "bucket"
+	ResourceFile     ResourceType = "file"
 )
 
 // RowCountCap mirrors appwrite.rowCountCap: the point at which Appwrite
@@ -55,6 +57,13 @@ type Resource struct {
 	// partially verified — spec section 21/25: never claim success when a
 	// check was skipped.
 	CountError string `json:"count_error,omitempty"`
+
+	// ContentDigest is a content hash for resources where Appwrite already
+	// provides one without amg needing to download content. Currently only
+	// ResourceFile sets this, to Appwrite's own server-computed MD5
+	// ("signature") — see appwrite.File. Comparing this field catches
+	// changed file content without ever transferring file bytes.
+	ContentDigest string `json:"content_digest,omitempty"`
 }
 
 // Inventory is a deterministic snapshot of a project's resources.
@@ -75,7 +84,6 @@ type Inventory struct {
 // always tell a user "I did not check X" instead of staying silent.
 var unsupportedResourceTypes = []string{
 	"legacy_databases_collections_documents",
-	"storage_buckets_files",
 	"users",
 	"functions",
 	"sites",

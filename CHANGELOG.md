@@ -7,6 +7,17 @@ follows [Keep a Changelog](https://keepachangelog.com/).
 
 ### Added
 
+- Storage inventory: `amg inventory`/`snapshot`/`compare`/`verify` now
+  cover buckets and files, in addition to TablesDB. Files carry their
+  Appwrite-computed MD5 `signature` as `Resource.ContentDigest`, compared
+  via a new `content_changed` rule — file content integrity is verified
+  without amg ever downloading a file. `config_changed` comparison is now
+  type-scoped per resource type (`comparedMetadataKeys`), fixing a latent
+  bug where a bucket's config keys could have been silently checked
+  against unrelated resource types.
+  Verified live: uploaded a file, snapshotted it, replaced its content
+  under the same file ID, snapshotted again, and `amg compare` correctly
+  reported the exact signature change.
 - `internal/manifest`: deterministic on-disk snapshot format
   (`.amg/runs/<run-id>/manifest.json`), no credential field ever.
 - `internal/compare`: offline PASS/WARN/BLOCK comparison engine — 9 rules

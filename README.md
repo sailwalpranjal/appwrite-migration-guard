@@ -5,12 +5,15 @@
 > **Status: early stage, core loop working end to end.** CLI skeleton,
 > configuration, the Appwrite REST client, `version`, `doctor`,
 > `inventory`, `snapshot`, `compare`, and `verify` are implemented,
-> tested, and verified against a live Appwrite Cloud project — including
-> deliberately introducing a permission change, a config change, and a
-> deleted table, and confirming amg caught every one of them. `preflight`
-> and `report` are registered commands that currently exit with an
-> explicit "not yet implemented" error — see [Roadmap](#roadmap). This
-> README describes what exists today, not the finished product.
+> tested, and verified against a live Appwrite Cloud project — covering
+> TablesDB (databases/tables/rows) and Storage (buckets/files, including
+> file content-integrity checks via MD5 signature). Deliberately
+> introduced a permission change, a config change, a deleted table, and
+> changed file content, and confirmed amg caught every one of them.
+> `preflight` and `report` are registered commands that currently exit
+> with an explicit "not yet implemented" error — see
+> [Roadmap](#roadmap). This README describes what exists today, not the
+> finished product.
 
 ## The problem
 
@@ -83,11 +86,12 @@ and that the configured API key is valid and has the `health.read` scope
 ./amg inventory
 ```
 
-`inventory` lists every TablesDB database and table in the configured
-project, plus a per-table row count (a single cheap `total` lookup, never
-row content). Add `--json` for machine-readable output, `--no-row-counts`
-to skip counts entirely, or `--concurrency N` to change how many Appwrite
-requests run at once (default 4). It never writes to your project.
+`inventory` lists every TablesDB database/table (plus a per-table row
+count) and every Storage bucket/file (including each file's MD5 content
+signature) in the configured project. Add `--json` for machine-readable
+output, `--no-row-counts` to skip row counts, or `--concurrency N` to
+change how many Appwrite requests run at once (default 4). It never
+writes to your project and never downloads file content.
 
 ```bash
 ./amg snapshot --label source --out source.json
@@ -191,14 +195,19 @@ go test ./...
 
 All claims of "supported" or "tested" in this repository are backed by the
 tests in the corresponding package — see `*_test.go` files next to the
-code they test. Beyond mocked-HTTP tests, this stage's full loop was run
-against a live Appwrite Cloud project: create a database + table, snapshot
-it as "source", change its permissions and a config flag, snapshot again
-as "destination", `amg compare` the two manifests (correctly reported both
-changes and nothing else), delete the table entirely and confirm
-`missing_resource` fires, then run `amg verify` live against the same
-project as both source and destination (correctly reported PASS), and
-finally deleted all test resources.
+code they test. Beyond mocked-HTTP tests, amg's core loop has been run twice against a
+live Appwrite Cloud project. TablesDB: create a database + table,
+snapshot it as "source", change its permissions and a config flag,
+snapshot again as "destination", `amg compare` the two manifests
+(correctly reported both changes and nothing else), delete the table
+entirely and confirm `missing_resource` fires, then run `amg verify` live
+against the same project as both source and destination (correctly
+reported PASS). Storage: create a bucket + upload a file, snapshot as
+"source", delete and re-upload the same file ID with different content,
+snapshot as "destination", `amg compare` correctly reported
+`content_changed` with the exact before/after MD5 signatures — without
+amg ever downloading the file. All test resources were deleted
+afterward.
 
 ## Migration lab
 
@@ -213,12 +222,14 @@ prove amg's comparison engine actually detects real problems — see
 - Pre-alpha: `version`, `doctor`, `inventory`, `snapshot`, `compare`, and
   `verify` do real work; `preflight` and `report` are stubs.
 - Inventory (and therefore comparison) covers TablesDB
-  (databases/tables/row counts) only. Legacy Databases
-  (collections/documents), Storage, Users, Functions, and Sites are
+  (databases/tables/row counts) and Storage (buckets/files) only. Legacy
+  Databases (collections/documents), Users, Functions, and Sites are
   explicitly marked `UNSUPPORTED`, not silently skipped — see
   [docs/migration-semantics.md](docs/migration-semantics.md).
-- No row *content* comparison — only counts. Two tables can have the same
-  row count with different data and amg will not currently catch that.
+- No row *content* comparison for TablesDB — only counts. Two tables can
+  have the same row count with different data and amg will not currently
+  catch that. (Files are different: their MD5 signature is compared, so
+  file content changes *are* caught without downloading anything.)
 - Row counts above 5,000 are capped by Appwrite itself; amg reports this
   as `row_count_unconfirmed` (WARN), never as a false match.
 - Only one normalization/"expected transformation" rule exists so far
@@ -236,7 +247,8 @@ prove amg's comparison engine actually detects real problems — see
 3. ~~Normalization + comparison engine + `amg compare` (fully offline)~~ — done.
 4. ~~`amg verify` wired to the comparison engine~~ — done. `amg preflight`
    (pre-migration risk checks) still open.
-5. Inventory + comparison for legacy Databases, Storage, Users, Functions.
+5. ~~Inventory + comparison for Storage (buckets/files, MD5 content
+   verification)~~ — done. Still open: legacy Databases, Users, Functions.
 6. JSON is done; static HTML reporting (`amg report`) still open.
 7. Fault-injection migration lab + CI.
 8. Cross-platform release binaries.
