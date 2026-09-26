@@ -17,10 +17,12 @@ SIGTERM), and maps the command's result to a process exit code.
 - `report.go` — `Checklist`/`Check`/`Status`, the PASS/WARN/BLOCK model.
   `Checklist.Overall()` is BLOCK for an empty checklist by design: an
   incomplete run must never render as success.
-- `version.go`, `doctor.go`, `inventory.go` — real implementations.
-- `stub.go` — `preflight`/`snapshot`/`verify`/`report`/`compare` currently
-  return an explicit "not implemented" BLOCK rather than silently doing
-  nothing.
+- `version.go`, `doctor.go`, `inventory.go`, `snapshot.go`, `compare.go`,
+  `verify.go` — real implementations.
+- `compare_report.go` — shared terminal renderer for `compare.Result`,
+  used by both `compare` and `verify` so their output stays identical.
+- `stub.go` — `preflight`/`report` currently return an explicit "not
+  implemented" BLOCK rather than silently doing nothing.
 
 ### `internal/appwrite`
 
@@ -66,6 +68,25 @@ bug found by testing against a live Appwrite Cloud project, documented on
   `runBestEffort`), not a generic executor framework — see the spec's
   "avoid premature abstraction" guidance.
 
+### `internal/manifest`
+
+Wraps an `inventory.Inventory` with `RunID`/`Label`/`CapturedAt` and
+writes/reads it as JSON under `.amg/runs/<run-id>/manifest.json` (or a
+caller-chosen path). `Manifest` has no field that could ever hold a
+credential, by construction — there is nothing to redact because there is
+nothing to leak.
+
+### `internal/compare`
+
+`Compare(sourceLabel, source, destLabel, dest) *Result` — the engine
+behind both `amg compare` (reads two manifest files, no network) and
+`amg verify` (inventories both sides live, then calls the exact same
+function). See docs/comparison-model.md for the full rule table. Resource
+matching is by `(Type, ID)`, not list position or parent, so a resource
+that moved to a different parent is still recognized as the same resource
+(and reported via `parent_changed`) rather than showing up as an
+unrelated missing+unexpected pair.
+
 ### `internal/config`
 
 Loads `Environment{Endpoint, ProjectID, APIKey}` from environment
@@ -90,7 +111,8 @@ release build time; defaults to `"dev"` for local builds.
 
 ## What is deliberately not here yet
 
-No manifest/snapshot format, no normalization rules, no comparison
-engine, no inventory of legacy Databases/Storage/Users/Functions/Sites,
-no JSON/HTML report renderers for comparisons, no persistent run history.
-These are staged work — see the README roadmap.
+No inventory (and therefore no comparison) of legacy Databases
+(collections/documents)/Storage/Users/Functions/Sites, no row *content*
+comparison (counts only), no `amg preflight`, no static HTML report
+renderer, no fault-injection migration lab. These are staged work — see
+the README roadmap.

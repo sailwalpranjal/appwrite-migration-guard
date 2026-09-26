@@ -7,6 +7,26 @@ follows [Keep a Changelog](https://keepachangelog.com/).
 
 ### Added
 
+- `internal/manifest`: deterministic on-disk snapshot format
+  (`.amg/runs/<run-id>/manifest.json`), no credential field ever.
+- `internal/compare`: offline PASS/WARN/BLOCK comparison engine — 9 rules
+  (`missing_resource`, `unexpected_resource`, `parent_changed`,
+  `name_changed`, `permission_changed`, `config_changed`,
+  `row_count_mismatch`, `row_count_unconfirmed`, `row_count_unverified`),
+  each with its own test. See docs/comparison-model.md.
+- `amg snapshot`: persists an inventory run as a manifest.
+- `amg compare <a> <b>`: fully offline comparison between two manifests —
+  no Appwrite credentials needed at all.
+- `amg verify`: live comparison — inventories `AMG_SOURCE_*` and
+  `AMG_DEST_*` concurrently, then runs the same comparison engine as
+  `compare`. This is the primary "did my migration work" command.
+- `docs/comparison-model.md`: the full rule table.
+- Full loop verified against a live Appwrite Cloud project: snapshot,
+  mutate (permission change, config change, delete a table), snapshot
+  again, `amg compare` correctly reported each change and nothing else;
+  `amg verify` run live against the same project as both sides correctly
+  reported PASS.
+
 - `amg inventory`: real TablesDB inventory (databases, tables, per-table
   row counts) with `--json`, `--no-row-counts`, `--concurrency` flags.
   Verified against a live Appwrite Cloud project (server version 2.3.0),

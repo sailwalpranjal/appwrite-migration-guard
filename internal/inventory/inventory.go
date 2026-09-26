@@ -22,6 +22,12 @@ const (
 	ResourceTable    ResourceType = "table"
 )
 
+// RowCountCap mirrors appwrite.rowCountCap: the point at which Appwrite
+// stops computing an exact row total. A Resource with RowCountCapped=true
+// has a RowCount that is a floor, not an exact figure — see
+// docs/migration-semantics.md.
+const RowCountCap = 5000
+
 // Resource is amg's canonical representation of one Appwrite resource,
 // independent of the raw Appwrite JSON it was built from (spec section
 // 14). Fields that don't apply to a given ResourceType are left zero.

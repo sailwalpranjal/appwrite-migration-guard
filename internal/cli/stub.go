@@ -20,8 +20,5 @@ func notImplemented(name string) func(context.Context, []string, io.Writer, io.W
 
 var (
 	RunPreflight = notImplemented("preflight")
-	RunSnapshot  = notImplemented("snapshot")
-	RunVerify    = notImplemented("verify")
 	RunReport    = notImplemented("report")
-	RunCompare   = notImplemented("compare")
 )

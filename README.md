@@ -2,14 +2,15 @@
 
 **Verify Appwrite changes before they become incidents.**
 
-> **Status: early stage, real inventory working.** CLI skeleton,
-> configuration, the Appwrite REST client, `version`, `doctor`, and
-> `inventory` (TablesDB: databases, tables, row counts) are implemented,
-> tested, and verified against a live Appwrite Cloud project. `preflight`,
-> `snapshot`, `verify`, `report`, and `compare` are registered commands
-> that currently exit with an explicit "not yet implemented" error — see
-> [Roadmap](#roadmap). This README describes what exists today, not the
-> finished product.
+> **Status: early stage, core loop working end to end.** CLI skeleton,
+> configuration, the Appwrite REST client, `version`, `doctor`,
+> `inventory`, `snapshot`, `compare`, and `verify` are implemented,
+> tested, and verified against a live Appwrite Cloud project — including
+> deliberately introducing a permission change, a config change, and a
+> deleted table, and confirming amg caught every one of them. `preflight`
+> and `report` are registered commands that currently exit with an
+> explicit "not yet implemented" error — see [Roadmap](#roadmap). This
+> README describes what exists today, not the finished product.
 
 ## The problem
 
@@ -88,6 +89,29 @@ row content). Add `--json` for machine-readable output, `--no-row-counts`
 to skip counts entirely, or `--concurrency N` to change how many Appwrite
 requests run at once (default 4). It never writes to your project.
 
+```bash
+./amg snapshot --label source --out source.json
+# ... time passes, a migration happens, or the environment changes ...
+./amg snapshot --label destination --out destination.json
+
+./amg compare source.json destination.json
+```
+
+`snapshot` runs the same inventory as `amg inventory` and persists it as a
+manifest (default: `.amg/runs/<run-id>/manifest.json`). `compare` then
+diffs two manifests **fully offline** — no Appwrite credentials needed —
+and prints exactly what changed, classified PASS/WARN/BLOCK. See
+[docs/comparison-model.md](docs/comparison-model.md) for every rule.
+
+```bash
+./amg verify
+```
+
+`verify` does the same comparison live: it inventories `AMG_SOURCE_*` and
+`AMG_DEST_*` concurrently, then runs the identical offline comparison
+engine `compare` uses. This is the "did my migration actually work"
+command.
+
 ## Configuration
 
 amg reads configuration from environment variables (and an optional local
@@ -122,6 +146,8 @@ cmd/amg/            CLI entrypoint (argument parsing, dispatch)
 internal/cli/       Subcommand implementations, PASS/WARN/BLOCK reporting
 internal/appwrite/   Minimal Appwrite REST client (auth, retries, pagination, TablesDB)
 internal/inventory/  Canonical resource model + bounded-concurrency collector
+internal/manifest/   Deterministic on-disk snapshot format (no credentials, ever)
+internal/compare/    Offline PASS/WARN/BLOCK comparison engine
 internal/config/     Environment-variable configuration loading
 internal/errs/       Typed error taxonomy (connectivity/auth/rate-limit/...)
 internal/version/    Build-time version metadata
@@ -138,11 +164,14 @@ Every check resolves to exactly one of:
 
 - **PASS** — verified and matches expectations (including documented,
   expected migration transformations).
-- **WARN** — verified only partially (e.g. metadata-only file check), or a
-  resource type is not yet supported by amg.
+- **WARN** — verified only partially (e.g. a row count hit Appwrite's
+  5,000 cap, or amg couldn't verify one side), or a resource type is not
+  yet supported by amg.
 - **BLOCK** — a real, unexplained difference, or amg could not complete
   verification at all. An incomplete run is always BLOCK, never a silent
   pass.
+
+Full rule table: [docs/comparison-model.md](docs/comparison-model.md).
 
 ## Security
 
@@ -162,9 +191,14 @@ go test ./...
 
 All claims of "supported" or "tested" in this repository are backed by the
 tests in the corresponding package — see `*_test.go` files next to the
-code they test. `inventory` has additionally been run against a live
-Appwrite Cloud project (create database → create table → `amg inventory`
-→ delete both), not just mocked HTTP servers.
+code they test. Beyond mocked-HTTP tests, this stage's full loop was run
+against a live Appwrite Cloud project: create a database + table, snapshot
+it as "source", change its permissions and a config flag, snapshot again
+as "destination", `amg compare` the two manifests (correctly reported both
+changes and nothing else), delete the table entirely and confirm
+`missing_resource` fires, then run `amg verify` live against the same
+project as both source and destination (correctly reported PASS), and
+finally deleted all test resources.
 
 ## Migration lab
 
@@ -176,30 +210,36 @@ prove amg's comparison engine actually detects real problems — see
 
 ## Limitations
 
-- Pre-alpha: `version`, `doctor`, and `inventory` do real work; everything
-  else is a stub.
-- Inventory covers TablesDB (databases/tables/row counts) only. Legacy
-  Databases (collections/documents), Storage, Users, Functions, and Sites
-  are explicitly marked `UNSUPPORTED`, not silently skipped — see
+- Pre-alpha: `version`, `doctor`, `inventory`, `snapshot`, `compare`, and
+  `verify` do real work; `preflight` and `report` are stubs.
+- Inventory (and therefore comparison) covers TablesDB
+  (databases/tables/row counts) only. Legacy Databases
+  (collections/documents), Storage, Users, Functions, and Sites are
+  explicitly marked `UNSUPPORTED`, not silently skipped — see
   [docs/migration-semantics.md](docs/migration-semantics.md).
-- Row counts above 5,000 are capped by Appwrite itself and reported as
-  such (`RowCountCapped`), not silently rounded or hidden.
-- No manifest snapshot format, no normalization, no comparison engine yet.
+- No row *content* comparison — only counts. Two tables can have the same
+  row count with different data and amg will not currently catch that.
+- Row counts above 5,000 are capped by Appwrite itself; amg reports this
+  as `row_count_unconfirmed` (WARN), never as a false match.
+- Only one normalization/"expected transformation" rule exists so far
+  ($createdAt/$updatedAt are never compared — see
+  [docs/comparison-model.md](docs/comparison-model.md)). Real migration
+  paths may have more expected transformations amg doesn't know about yet.
 - Not tested against every self-hosted Appwrite version — verified so far
   against Appwrite Cloud running server version 2.3.0.
 - Windows/macOS/Linux binaries are not yet published; build from source.
 
 ## Roadmap
 
-1. ~~Inventory: TablesDB (tables/rows)~~ — done. Next: legacy Databases
-   (collections/documents), Storage buckets/files, Users, Functions.
-2. Deterministic manifest format + `amg snapshot` (persist an Inventory
-   run to `.amg/runs/<id>/manifest.json`).
-3. Normalization + comparison engine + `amg compare` (fully offline).
-4. `amg preflight` / `amg verify` wired to the comparison engine.
-5. Terminal, JSON, and static HTML reporting for comparisons.
-6. Fault-injection migration lab + CI.
-7. Cross-platform release binaries.
+1. ~~Inventory: TablesDB (tables/rows)~~ — done.
+2. ~~Deterministic manifest format + `amg snapshot`~~ — done.
+3. ~~Normalization + comparison engine + `amg compare` (fully offline)~~ — done.
+4. ~~`amg verify` wired to the comparison engine~~ — done. `amg preflight`
+   (pre-migration risk checks) still open.
+5. Inventory + comparison for legacy Databases, Storage, Users, Functions.
+6. JSON is done; static HTML reporting (`amg report`) still open.
+7. Fault-injection migration lab + CI.
+8. Cross-platform release binaries.
 
 ## Contributing
 
