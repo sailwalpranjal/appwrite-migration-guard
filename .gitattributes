@@ -1,0 +1,18 @@
+# Go source must stay LF: gofmt, go vet, and CI (which runs on Linux)
+# all assume it, and Windows autocrlf converting checked-out .go files to
+# CRLF makes `gofmt -l` flag every file as unformatted even when nothing
+# actually changed.
+*.go     text eol=lf
+go.mod   text eol=lf
+go.sum   text eol=lf
+
+*.md     text eol=lf
+*.yml    text eol=lf
+*.yaml   text eol=lf
+*.json   text eol=lf
+.gitignore     text eol=lf
+.gitattributes text eol=lf
+.env.example   text eol=lf
+
+*.png binary
+*.jpg binary
