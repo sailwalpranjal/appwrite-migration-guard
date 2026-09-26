@@ -4,16 +4,16 @@
 
 > **Status: early stage, core loop working end to end.** CLI skeleton,
 > configuration, the Appwrite REST client, `version`, `doctor`,
-> `inventory`, `snapshot`, `compare`, and `verify` are implemented,
-> tested, and verified against a live Appwrite Cloud project — covering
-> TablesDB (databases/tables/rows) and Storage (buckets/files, including
-> file content-integrity checks via MD5 signature). Deliberately
-> introduced a permission change, a config change, a deleted table, and
-> changed file content, and confirmed amg caught every one of them.
-> `preflight` and `report` are registered commands that currently exit
-> with an explicit "not yet implemented" error — see
-> [Roadmap](#roadmap). This README describes what exists today, not the
-> finished product.
+> `inventory`, `snapshot`, `compare`, `verify`, and `preflight` are
+> implemented, tested, and verified against a live Appwrite Cloud
+> project — covering TablesDB (databases/tables/rows) and Storage
+> (buckets/files, including file content-integrity checks via MD5
+> signature). Deliberately introduced a permission change, a config
+> change, a deleted table, changed file content, and a destination
+> resource ID collision, and confirmed amg caught every one of them.
+> `report` is a registered command that currently exits with an explicit
+> "not yet implemented" error — see [Roadmap](#roadmap). This README
+> describes what exists today, not the finished product.
 
 ## The problem
 
@@ -116,6 +116,17 @@ and prints exactly what changed, classified PASS/WARN/BLOCK. See
 engine `compare` uses. This is the "did my migration actually work"
 command.
 
+```bash
+./amg preflight
+```
+
+`preflight` runs *before* a migration: connectivity, authentication, and
+Appwrite version on both `AMG_SOURCE_*` and `AMG_DEST_*`, then inventories
+both sides and checks whether the destination already has a resource with
+the same ID as something in the source — a real collision risk, not a
+"looks the same" success the way `verify` treats it. Answers "can I safely
+proceed, or are there unresolved risks?"
+
 ## Configuration
 
 amg reads configuration from environment variables (and an optional local
@@ -131,16 +142,18 @@ amg reads configuration from environment variables (and an optional local
 API keys are never logged, never written to manifests or reports, and are
 only ever sent as the `X-Appwrite-Key` HTTP header.
 
-## Example workflow (target shape — not all steps exist yet)
+## Example workflow (last step, `report`, isn't built yet)
 
 ```text
-amg doctor                # confirm connectivity + auth on both sides
-amg inventory              # inventory the source project
-amg preflight               # check source/destination compatibility
+amg doctor                  # confirm connectivity + auth
+amg preflight                # check source/destination readiness, before migrating
 # ... you run the Appwrite migration or upgrade yourself ...
-amg snapshot                # inventory the destination project
-amg verify                  # compare source, expected, and destination
-amg report --format html    # render the result
+amg verify                   # compare source and destination live
+# or, offline, from saved manifests:
+amg snapshot --label source --out source.json       # before the migration
+amg snapshot --label destination --out dest.json    # after the migration
+amg compare source.json dest.json
+amg report --format html    # not yet implemented
 ```
 
 ## Architecture
@@ -195,19 +208,23 @@ go test ./...
 
 All claims of "supported" or "tested" in this repository are backed by the
 tests in the corresponding package — see `*_test.go` files next to the
-code they test. Beyond mocked-HTTP tests, amg's core loop has been run twice against a
-live Appwrite Cloud project. TablesDB: create a database + table,
-snapshot it as "source", change its permissions and a config flag,
-snapshot again as "destination", `amg compare` the two manifests
-(correctly reported both changes and nothing else), delete the table
-entirely and confirm `missing_resource` fires, then run `amg verify` live
-against the same project as both source and destination (correctly
-reported PASS). Storage: create a bucket + upload a file, snapshot as
-"source", delete and re-upload the same file ID with different content,
-snapshot as "destination", `amg compare` correctly reported
-`content_changed` with the exact before/after MD5 signatures — without
-amg ever downloading the file. All test resources were deleted
-afterward.
+code they test. Beyond mocked-HTTP tests, amg's core loop has been run
+three times against a live Appwrite Cloud project. TablesDB: create a
+database + table, snapshot it as "source", change its permissions and a
+config flag, snapshot again as "destination", `amg compare` the two
+manifests (correctly reported both changes and nothing else), delete the
+table entirely and confirm `missing_resource` fires, then run `amg
+verify` live against the same project as both source and destination
+(correctly reported PASS). Storage: create a bucket + upload a file,
+snapshot as "source", delete and re-upload the same file ID with
+different content, snapshot as "destination", `amg compare` correctly
+reported `content_changed` with the exact before/after MD5 signatures —
+without amg ever downloading the file. Preflight: created a database,
+pointed `AMG_SOURCE_*`/`AMG_DEST_*` at the same project, and confirmed
+`amg preflight` correctly reported a `Destination conflict` BLOCK for the
+already-existing database ID; also confirmed it reports the specific "API
+key was rejected" reason (not a generic error) when given bad
+credentials. All test resources were deleted afterward.
 
 ## Migration lab
 
@@ -219,8 +236,12 @@ prove amg's comparison engine actually detects real problems — see
 
 ## Limitations
 
-- Pre-alpha: `version`, `doctor`, `inventory`, `snapshot`, `compare`, and
-  `verify` do real work; `preflight` and `report` are stubs.
+- Pre-alpha: `version`, `doctor`, `inventory`, `snapshot`, `compare`,
+  `verify`, and `preflight` do real work; `report` is a stub.
+- `preflight`'s "destination conflict" check is ID-based only: it flags a
+  resource ID that already exists on the destination, but cannot tell you
+  *why* it's there or whether that's actually a problem for your specific
+  migration.
 - Inventory (and therefore comparison) covers TablesDB
   (databases/tables/row counts) and Storage (buckets/files) only. Legacy
   Databases (collections/documents), Users, Functions, and Sites are
@@ -245,8 +266,8 @@ prove amg's comparison engine actually detects real problems — see
 1. ~~Inventory: TablesDB (tables/rows)~~ — done.
 2. ~~Deterministic manifest format + `amg snapshot`~~ — done.
 3. ~~Normalization + comparison engine + `amg compare` (fully offline)~~ — done.
-4. ~~`amg verify` wired to the comparison engine~~ — done. `amg preflight`
-   (pre-migration risk checks) still open.
+4. ~~`amg verify` wired to the comparison engine~~ — done.
+   ~~`amg preflight` (pre-migration risk checks)~~ — done.
 5. ~~Inventory + comparison for Storage (buckets/files, MD5 content
    verification)~~ — done. Still open: legacy Databases, Users, Functions.
 6. JSON is done; static HTML reporting (`amg report`) still open.

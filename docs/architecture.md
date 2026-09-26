@@ -18,11 +18,14 @@ SIGTERM), and maps the command's result to a process exit code.
   `Checklist.Overall()` is BLOCK for an empty checklist by design: an
   incomplete run must never render as success.
 - `version.go`, `doctor.go`, `inventory.go`, `snapshot.go`, `compare.go`,
-  `verify.go` — real implementations.
+  `verify.go`, `preflight.go` — real implementations. `doctor.go` also
+  holds `explainAuthError`, a shared helper both it and `preflight.go`
+  use to tell "API key rejected" apart from "API key missing a scope"
+  instead of a bare error string.
 - `compare_report.go` — shared terminal renderer for `compare.Result`,
   used by both `compare` and `verify` so their output stays identical.
-- `stub.go` — `preflight`/`report` currently return an explicit "not
-  implemented" BLOCK rather than silently doing nothing.
+- `stub.go` — `report` currently returns an explicit "not implemented"
+  BLOCK rather than silently doing nothing.
 
 ### `internal/appwrite`
 
@@ -118,6 +121,6 @@ release build time; defaults to `"dev"` for local builds.
 No inventory (and therefore no comparison) of legacy Databases
 (collections/documents)/Users/Functions/Sites, no row *content*
 comparison (counts only — files get content verification via their MD5
-signature, but TablesDB rows do not), no `amg preflight`, no static HTML
-report renderer, no fault-injection migration lab. These are staged work
-— see the README roadmap.
+signature, but TablesDB rows do not), no static HTML report renderer, no
+fault-injection migration lab. These are staged work — see the README
+roadmap.

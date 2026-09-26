@@ -7,6 +7,25 @@ follows [Keep a Changelog](https://keepachangelog.com/).
 
 ### Added
 
+- `amg preflight`: pre-migration readiness checks against
+  `AMG_SOURCE_*`/`AMG_DEST_*` — connectivity, authentication, Appwrite
+  version match, and a `Destination conflict` check for resource IDs that
+  already exist on the destination *before* any migration (a collision
+  risk, unlike `verify`'s post-migration "should already match"
+  semantics). Source/destination inventory now runs concurrently (fixed
+  during self-review — it was serial and could starve the second side's
+  timeout budget on a large source project). Also fixed during
+  self-review: an unreachable side was re-dialed a second time for an
+  authentication check it could never pass, producing a duplicate,
+  confusing finding.
+  Verified live: pointed source and destination at the same project with
+  an existing database and confirmed `amg preflight` reported a
+  `Destination conflict` BLOCK naming the exact colliding resource;
+  confirmed bad credentials produce the specific "API key was rejected"
+  reason via a new `explainAuthError` helper shared with `amg doctor`.
+- Added `.gitattributes` forcing LF line endings for Go source — fixes
+  `gofmt -l` spuriously flagging every file as unformatted on Windows
+  checkouts with no actual content difference.
 - Storage inventory: `amg inventory`/`snapshot`/`compare`/`verify` now
   cover buckets and files, in addition to TablesDB. Files carry their
   Appwrite-computed MD5 `signature` as `Resource.ContentDigest`, compared

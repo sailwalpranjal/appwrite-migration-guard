@@ -43,14 +43,7 @@ func RunDoctor(ctx context.Context, _ []string, stdout, stderr io.Writer) int {
 	list.Pass(fmt.Sprintf("Endpoint reachable (Appwrite %s)", v.Version))
 
 	if _, err := client.Health(runCtx); err != nil {
-		switch {
-		case errs.IsKind(err, errs.KindAuthentication):
-			list.Block("Authentication", "API key was rejected: "+explain(err))
-		case errs.IsKind(err, errs.KindAuthorization):
-			list.Block("Authentication", "API key is missing the health.read scope: "+explain(err))
-		default:
-			list.Block("Authentication", explain(err))
-		}
+		list.Block("Authentication", explainAuthError(err))
 		list.WriteTerminal(stdout, "Appwrite Migration Guard — doctor")
 		return list.ExitCode()
 	}
@@ -65,4 +58,19 @@ func RunDoctor(ctx context.Context, _ []string, stdout, stderr io.Writer) int {
 // error text (they are sent only as headers), so this is a plain format.
 func explain(err error) string {
 	return err.Error()
+}
+
+// explainAuthError renders a Client.Health() failure with a specific,
+// actionable reason where amg can tell one apart from another, instead of
+// a bare error string — shared by doctor and preflight so the same
+// underlying failure gets the same explanation in both commands.
+func explainAuthError(err error) string {
+	switch {
+	case errs.IsKind(err, errs.KindAuthentication):
+		return "API key was rejected: " + explain(err)
+	case errs.IsKind(err, errs.KindAuthorization):
+		return "API key is missing the health.read scope: " + explain(err)
+	default:
+		return explain(err)
+	}
 }
