@@ -36,6 +36,11 @@ two unrelated "missing" + "unexpected" resources.
 | `row_count_unverified` | WARN | amg couldn't determine the row count on at least one side during inventory (see `Resource.CountError`) — a partial-verification case, not a hard failure. |
 | `content_changed` | BLOCK | A file's content signature (Appwrite's own server-computed MD5) differs between source and destination — detected without downloading either file. |
 | `content_unverified` | WARN | A file's content signature is missing on at least one side, so content equality could not be confirmed either way — never silently treated as a match. |
+| `row_content_changed` | BLOCK | A sampled row's content digest differs between source and destination — see [Row content sampling](#row-content-sampling-optin) below. |
+| `row_permission_changed` | BLOCK | A sampled row's own `$permissions` differ (rows have permissions independent of their table's). |
+| `row_sample_missing` | WARN | A sampled source row's ID wasn't found in the destination's sample — could mean the row is genuinely gone, or just fell outside the sampled window. Not a confirmed loss. |
+| `row_sample_unexpected` | WARN | The reverse: a destination row's ID wasn't in the source sample. |
+| `row_sample_unverified` | WARN | Row sampling itself failed on at least one side (`Resource.SampleError`) — partial verification, not a hard failure. |
 
 `config_changed` compares different metadata keys depending on resource
 type (`comparedMetadataKeys` in `compare.go`), so a bucket's
@@ -67,9 +72,35 @@ or IDs) will only be added once verified against that migration path's
 actual behavior, each with its own source citation and test — never
 guessed.
 
+## Row content sampling (opt-in)
+
+By default, TablesDB rows are only *counted* (`amg.CountRows`), never
+inspected. Passing `--sample-rows N` to `inventory`/`snapshot`/`verify`
+additionally fetches the first N rows per table (ordered by `$id`,
+capped at 500 — see `appwrite.maxSampleRows`) and fingerprints each one
+(`appwrite.RowSample`): its own row-level `$permissions`, and a SHA-256
+digest of its user-defined column values. Appwrite prefixes every
+system-managed field with `$` ($id, $sequence, $tableId, $databaseId,
+$createdAt, $updatedAt, $permissions — confirmed across `Model/Row.php`
+and its siblings), so stripping `$`-prefixed keys before hashing
+reliably isolates real column data; the digest is computed with Go's
+`encoding/json`, which sorts map keys, so it doesn't depend on the order
+Appwrite returned fields in.
+
+amg never stores or transmits the row content itself — only the
+resulting digest and permission list end up in a manifest.
+
+This is deliberately a **best-effort, non-exhaustive** check: because
+only the first N rows (by ID) are sampled, a changed row outside that
+window is invisible to it. Sampling is ordered by `$id` specifically so
+the *same* rows are sampled on both sides of an unchanged table (making
+comparison meaningful) — this assumes row IDs are preserved by whatever
+migration path moved the data, the same assumption every other
+ID-matched comparison in this document already makes.
+
 ## What this does not do yet
 
-No content/row diffing (rows are only ever counted, never fetched), no
-legacy Databases/Storage/Users/Functions/Sites comparison (they aren't
-inventoried yet — see `Inventory.Unsupported`), no persisted
-run-to-run history beyond the manifest files themselves.
+No comparison for legacy Databases/Users/Functions/Sites (they aren't
+inventoried yet — see `Inventory.Unsupported`), no persisted run-to-run
+history beyond the manifest files themselves, no exhaustive (non-sampled)
+row content verification.

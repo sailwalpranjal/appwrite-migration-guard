@@ -64,6 +64,27 @@ type Resource struct {
 	// ("signature") — see appwrite.File. Comparing this field catches
 	// changed file content without ever transferring file bytes.
 	ContentDigest string `json:"content_digest,omitempty"`
+
+	// RowSamples holds a bounded, deterministic sample of row content
+	// fingerprints for a ResourceTable — populated only when sampling is
+	// enabled (see Options.SampleRows). This is a best-effort integrity
+	// check, not exhaustive verification: a changed row outside the
+	// sampled window is not detected. See docs/migration-semantics.md.
+	RowSamples []RowSample `json:"row_samples,omitempty"`
+
+	// SampleError records that amg attempted row sampling on this table
+	// but could not complete it (e.g. a transient failure or a scope the
+	// API key lacks) — partial verification, not a hard failure.
+	SampleError string `json:"sample_error,omitempty"`
+}
+
+// RowSample is amg's canonical fingerprint of one sampled row: never the
+// row's actual content, only its ID, its own row-level permissions
+// (independent of the parent table's), and a content digest.
+type RowSample struct {
+	ID          string   `json:"id"`
+	Permissions []string `json:"permissions,omitempty"`
+	Digest      string   `json:"digest"`
 }
 
 // Inventory is a deterministic snapshot of a project's resources.
@@ -131,11 +152,11 @@ func (inv *Inventory) CountByType() map[ResourceType]int {
 }
 
 // PartiallyVerified reports whether any resource has a non-empty
-// CountError, meaning this inventory is incomplete despite not having
-// failed outright.
+// CountError or SampleError, meaning this inventory is incomplete despite
+// not having failed outright.
 func (inv *Inventory) PartiallyVerified() bool {
 	for _, r := range inv.Resources {
-		if r.CountError != "" {
+		if r.CountError != "" || r.SampleError != "" {
 			return true
 		}
 	}

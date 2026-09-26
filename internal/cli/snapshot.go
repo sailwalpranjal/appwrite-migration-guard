@@ -26,6 +26,7 @@ func RunSnapshot(ctx context.Context, args []string, stdout, stderr io.Writer) i
 	label := fs.String("label", "target", "label recorded in the manifest (e.g. \"source\", \"destination\")")
 	out := fs.String("out", "", "manifest output path (default: .amg/runs/<run-id>/manifest.json)")
 	noCounts := fs.Bool("no-row-counts", false, "skip per-table row counts (metadata only)")
+	sampleRows := fs.Int("sample-rows", 0, "fetch up to N rows per table and record a content digest for each; 0 disables sampling (default)")
 	concurrency := fs.Int("concurrency", inventory.DefaultConcurrency, "maximum concurrent Appwrite requests")
 	if err := fs.Parse(args); err != nil {
 		return ExitBlock
@@ -45,6 +46,7 @@ func RunSnapshot(ctx context.Context, args []string, stdout, stderr io.Writer) i
 	inv, err := inventory.Collect(runCtx, client, env.Endpoint, env.ProjectID, inventory.Options{
 		Concurrency: *concurrency,
 		CountRows:   !*noCounts,
+		SampleRows:  *sampleRows,
 	})
 	if err != nil {
 		fmt.Fprintln(stderr, "amg snapshot:", err.Error())

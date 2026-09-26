@@ -65,11 +65,27 @@ depends on Appwrite's signature being recomputed correctly by whatever
 migration path moved the file — amg has not independently verified that
 claim beyond confirming the field exists and is populated on upload.
 
+## Row content sampling assumes row IDs survive migration
+
+`amg`'s opt-in row-content sampling (`--sample-rows N`, see
+docs/comparison-model.md) compares the first N rows *by `$id`* on each
+side. This only produces a meaningful comparison if a migration preserves
+row IDs rather than reassigning new ones (e.g. via `ID.unique()`) — the
+same assumption every other resource comparison in amg already makes
+implicitly (databases/tables/buckets/files are all matched by ID too).
+amg has not independently verified that any particular Appwrite migration
+path preserves row IDs; if yours doesn't, sampled comparisons will show
+spurious `row_sample_missing`/`row_sample_unexpected` findings rather
+than real content differences.
+
 ## What is not yet defined
 
-Normalization rules (which differences are "expected migration
-transformations" vs. real problems) do not exist yet — there is no
-migration/normalization engine in amg as of this stage. This document
-will grow once that engine is built, with one documented rule + source +
-test per transformation, per the project's own rule against guessing
+Only one *structural* normalization rule exists ($createdAt/$updatedAt
+excluded — see docs/comparison-model.md), grounded in the TablesDB API
+itself accepting no client-supplied timestamp. Normalization rules about
+*specific migration tools'* behavior (e.g. "Appwrite's own migration
+feature does X to permissions") do not exist yet, because amg has not
+verified any specific migration tool's behavior against real before/after
+data. This document will grow one rule at a time, each with its own
+source citation and test, per the project's own rule against guessing
 Appwrite behavior.

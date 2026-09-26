@@ -7,6 +7,29 @@ follows [Keep a Changelog](https://keepachangelog.com/).
 
 ### Added
 
+- Opt-in TablesDB row content verification (`--sample-rows N` on
+  `inventory`/`snapshot`/`verify`), directly addressing the previously
+  documented "row content comparison: only counts" limitation.
+  `appwrite.Client.SampleRows` fetches up to N rows (capped at 500,
+  ordered by `$id` for determinism) and fingerprints each one — a
+  SHA-256 digest of user-defined column values (every Appwrite-managed
+  field is `$`-prefixed and excluded) plus the row's own `$permissions`
+  — never storing or transmitting row content itself. New comparison
+  rules: `row_content_changed`/`row_permission_changed` (BLOCK, a
+  confirmed difference within the sample) and
+  `row_sample_missing`/`row_sample_unexpected`/`row_sample_unverified`
+  (WARN — sampling is inherently partial, so absence from a sample is
+  never treated as confirmed loss).
+  Self code-reviewed before landing; fixed two findings: CountRows and
+  SampleRows ran as two full sequential passes over every table instead
+  of one combined pass (roughly doubling wall-clock time), and a
+  row-sampling failure was misreported in the terminal summary as "row
+  counts were not verified" even when counting succeeded fine.
+  Verified live: created a table with two rows, snapshotted with
+  `--sample-rows 10`, edited one row's content, snapshotted again, and
+  `amg compare` correctly reported `row_content_changed` for exactly the
+  changed row — with `$updatedAt` drift on both rows correctly producing
+  no finding.
 - `amg preflight`: pre-migration readiness checks against
   `AMG_SOURCE_*`/`AMG_DEST_*` — connectivity, authentication, Appwrite
   version match, and a `Destination conflict` check for resource IDs that
