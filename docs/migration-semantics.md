@@ -48,6 +48,23 @@ all, by design — see the comment on `requestAuth` in
 project, not anticipated in advance; if you find another Appwrite
 endpoint with surprising auth-header sensitivity, please open an issue.
 
+## File content verification without downloading files
+
+Appwrite's File model (`Model/File.php`) includes a `signature` field —
+"File MD5 signature" — computed and stored by the server itself when the
+file is uploaded. amg reads this field as `Resource.ContentDigest` and
+compares it directly (`content_changed` rule), which means file content
+integrity can be verified across a migration without amg ever
+downloading file bytes. This is deliberately different from — and safer
+for large datasets than — the "sampled/full content hashing" approach
+described in the project's own design notes, because Appwrite already
+did the hashing.
+
+Caveat: this only detects that content differs, not what changed, and it
+depends on Appwrite's signature being recomputed correctly by whatever
+migration path moved the file — amg has not independently verified that
+claim beyond confirming the field exists and is populated on upload.
+
 ## What is not yet defined
 
 Normalization rules (which differences are "expected migration

@@ -34,6 +34,19 @@ two unrelated "missing" + "unexpected" resources.
 | `row_count_mismatch` | BLOCK | Table row counts differ and neither side hit Appwrite's count cap. |
 | `row_count_unconfirmed` | WARN | Row counts differ (or can't be compared meaningfully) because at least one side hit Appwrite's 5,000-row count cap — see docs/migration-semantics.md. Equal capped counts on both sides produce no finding at all. |
 | `row_count_unverified` | WARN | amg couldn't determine the row count on at least one side during inventory (see `Resource.CountError`) — a partial-verification case, not a hard failure. |
+| `content_changed` | BLOCK | A file's content signature (Appwrite's own server-computed MD5) differs between source and destination — detected without downloading either file. |
+| `content_unverified` | WARN | A file's content signature is missing on at least one side, so content equality could not be confirmed either way — never silently treated as a match. |
+
+`config_changed` compares different metadata keys depending on resource
+type (`comparedMetadataKeys` in `compare.go`), so a bucket's
+`file_security` is never compared against a table's `row_security`, etc:
+
+| Resource type | Compared metadata keys |
+|---|---|
+| `database` | `enabled`, `type`, `status` |
+| `table` | `enabled`, `row_security` |
+| `bucket` | `enabled`, `file_security`, `maximum_file_size`, `allowed_file_extensions`, `compression`, `encryption`, `antivirus` |
+| `file` | `mime_type` |
 
 ## Deliberately excluded from comparison
 

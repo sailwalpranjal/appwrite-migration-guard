@@ -31,25 +31,38 @@ func (o Options) withDefaults() Options {
 	return o
 }
 
-// Collect inventories every TablesDB database, table, and (optionally) row
-// count in the project client is configured for. It returns an error (and
-// no partial Inventory) if it cannot enumerate databases or tables at all
-// — those are hard requirements for the inventory to mean anything. Row
+// Collect inventories every TablesDB database/table and every Storage
+// bucket/file in the project client is configured for, plus (optionally)
+// a row count per table. It returns an error (and no partial Inventory)
+// if it cannot enumerate databases, tables, buckets, or files at all —
+// those are hard requirements for the inventory to mean anything. Row
 // count failures for individual tables are recorded on that Resource
 // instead of aborting the whole run (spec section 21: partial
 // verification is a WARN, not a failure of everything else already
 // collected).
 //
-// Legacy Databases (collections/documents), Storage, Users, Functions, and
-// Sites are not yet collected; they are listed in Inventory.Unsupported
-// rather than silently omitted.
+// Legacy Databases (collections/documents), Users, Functions, and Sites
+// are not yet collected; they are listed in Inventory.Unsupported rather
+// than silently omitted.
 func Collect(ctx context.Context, client *appwrite.Client, endpoint, projectID string, opts Options) (*Inventory, error) {
 	opts = opts.withDefaults()
 	inv := New(endpoint, projectID)
 
+	if err := collectTablesDB(ctx, client, inv, opts); err != nil {
+		return nil, err
+	}
+	if err := collectStorage(ctx, client, inv, opts); err != nil {
+		return nil, err
+	}
+
+	inv.Sort()
+	return inv, nil
+}
+
+func collectTablesDB(ctx context.Context, client *appwrite.Client, inv *Inventory, opts Options) error {
 	dbs, err := client.ListDatabases(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("list databases: %w", err)
+		return fmt.Errorf("list databases: %w", err)
 	}
 
 	tablesByDB := make([][]appwrite.Table, len(dbs))
@@ -62,7 +75,7 @@ func Collect(ctx context.Context, client *appwrite.Client, endpoint, projectID s
 		return nil
 	})
 	if err != nil {
-		return nil, err
+		return err
 	}
 
 	for i, db := range dbs {
@@ -117,6 +130,63 @@ func Collect(ctx context.Context, client *appwrite.Client, endpoint, projectID s
 		})
 	}
 
-	inv.Sort()
-	return inv, nil
+	return nil
+}
+
+func collectStorage(ctx context.Context, client *appwrite.Client, inv *Inventory, opts Options) error {
+	buckets, err := client.ListBuckets(ctx)
+	if err != nil {
+		return fmt.Errorf("list buckets: %w", err)
+	}
+
+	filesByBucket := make([][]appwrite.File, len(buckets))
+	err = runFailFast(ctx, opts.Concurrency, len(buckets), func(ctx context.Context, i int) error {
+		files, err := client.ListFiles(ctx, buckets[i].ID)
+		if err != nil {
+			return fmt.Errorf("list files for bucket %q: %w", buckets[i].ID, err)
+		}
+		filesByBucket[i] = files
+		return nil
+	})
+	if err != nil {
+		return err
+	}
+
+	for i, b := range buckets {
+		inv.Resources = append(inv.Resources, Resource{
+			Type:        ResourceBucket,
+			ID:          b.ID,
+			Name:        b.Name,
+			Permissions: b.Permissions,
+			CreatedAt:   b.CreatedAt,
+			UpdatedAt:   b.UpdatedAt,
+			Metadata: map[string]any{
+				"enabled":                 b.Enabled,
+				"file_security":           b.FileSecurity,
+				"maximum_file_size":       b.MaximumFileSize,
+				"allowed_file_extensions": b.AllowedFileExtensions,
+				"compression":             b.Compression,
+				"encryption":              b.Encryption,
+				"antivirus":               b.Antivirus,
+			},
+		})
+		for _, f := range filesByBucket[i] {
+			inv.Resources = append(inv.Resources, Resource{
+				Type:          ResourceFile,
+				ID:            f.ID,
+				ParentID:      b.ID,
+				Name:          f.Name,
+				Permissions:   f.Permissions,
+				CreatedAt:     f.CreatedAt,
+				UpdatedAt:     f.UpdatedAt,
+				ContentDigest: f.Signature,
+				Metadata: map[string]any{
+					"mime_type":     f.MimeType,
+					"size_original": f.SizeOriginal,
+				},
+			})
+		}
+	}
+
+	return nil
 }
