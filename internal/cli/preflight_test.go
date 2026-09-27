@@ -81,6 +81,29 @@ func TestRunPreflight_NoConflicts_Pass(t *testing.T) {
 	}
 }
 
+// TestRunPreflight_ResourcesFlag_NoConflicts_DisclosesScope is a
+// regression guard caught in self-review: an unqualified "No
+// destination resource ID conflicts" PASS after a --resources-narrowed
+// run would otherwise read as "no conflicts anywhere," when categories
+// outside the filter (which could hold a real colliding ID) were never
+// inventoried on either side at all.
+func TestRunPreflight_ResourcesFlag_NoConflicts_DisclosesScope(t *testing.T) {
+	src := preflightServer(t, "2.3.0", []string{"db-a"})
+	defer src.Close()
+	dst := preflightServer(t, "2.3.0", []string{"db-b"})
+	defer dst.Close()
+	withSourceDestEnv(t, src.URL, dst.URL)
+
+	var stdout, stderr bytes.Buffer
+	code := RunPreflight(context.Background(), []string{"--resources", "tables"}, &stdout, &stderr)
+	if code != ExitOK {
+		t.Fatalf("expected ExitOK, got %d; stdout:\n%s stderr:\n%s", code, stdout.String(), stderr.String())
+	}
+	if !bytes.Contains(stdout.Bytes(), []byte("other categories were not checked")) {
+		t.Fatalf("expected the PASS message to disclose the --resources scope:\n%s", stdout.String())
+	}
+}
+
 func TestRunPreflight_DestinationConflict_Blocks(t *testing.T) {
 	src := preflightServer(t, "2.3.0", []string{"db-shared"})
 	defer src.Close()

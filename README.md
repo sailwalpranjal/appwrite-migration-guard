@@ -126,10 +126,17 @@ count) and every Storage bucket/file (including each file's MD5 content
 signature) in the configured project. Add `--json` for machine-readable
 output, `--no-row-counts` to skip row counts, `--sample-rows N` to also
 fingerprint the first N rows per table for content verification (off by
-default — this reads real row data, unlike counts), or `--concurrency N`
-to change how many Appwrite requests run at once (default 4). It never
-writes to your project and never downloads file content; sampled row
-content is hashed and discarded immediately, never stored or transmitted.
+default — this reads real row data, unlike counts), `--concurrency N`
+to change how many Appwrite requests run at once (default 4), or
+`--resources tables,storage,...` to restrict collection to specific
+categories (`tables`, `storage`, `users`, `functions`, `sites`; default
+is all) — matching your API key's actual scopes instead of hitting a
+hard authorization failure for a category you were never granted access
+to and don't need (see the scope list under
+[Configuration](#configuration)). `inventory`, `snapshot`, `verify`, and
+`preflight` all accept `--resources`. It never writes to your project
+and never downloads file content; sampled row content is hashed and
+discarded immediately, never stored or transmitted.
 
 ```bash
 ./amg snapshot --label source --out source.json

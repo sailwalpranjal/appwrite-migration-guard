@@ -32,6 +32,7 @@ func RunInventory(ctx context.Context, args []string, stdout, stderr io.Writer) 
 	sampleRows := fs.Int("sample-rows", 0, "fetch up to N rows per table (ordered by $id) and record a content digest for each; 0 disables sampling (default). This reads real row data — opt in deliberately.")
 	concurrency := fs.Int("concurrency", inventory.DefaultConcurrency, "maximum concurrent Appwrite requests")
 	timeout := fs.Duration("timeout", inventoryTimeout, "maximum time to allow the whole inventory run — raise this for large projects (many tables/rows/files/users) that don't finish within the default")
+	resources := fs.String("resources", "", resourcesFlagHelp)
 	if err := fs.Parse(args); err != nil {
 		return exitForParseError(err)
 	}
@@ -51,6 +52,7 @@ func RunInventory(ctx context.Context, args []string, stdout, stderr io.Writer) 
 		Concurrency: *concurrency,
 		CountRows:   !*noCounts,
 		SampleRows:  *sampleRows,
+		Resources:   parseResourcesFlag(*resources),
 	})
 	if err != nil {
 		fmt.Fprintln(stderr, "amg inventory:", err.Error())
@@ -78,6 +80,22 @@ func exitForInventory(inv *inventory.Inventory) int {
 	return ExitOK
 }
 
+// writeCategoryCount prints one summary line, marking it as
+// "(not requested — see --resources)" instead of a plain PASS/count
+// when category was excluded via --resources: a 0 count is otherwise
+// visually identical whether a category is genuinely empty or was
+// simply never checked, which would misrepresent an intentionally
+// narrowed run as having confirmed "nothing here."
+func writeCategoryCount(w io.Writer, inv *inventory.Inventory, category, label string) {
+	for _, c := range inv.Collected {
+		if c == category {
+			fmt.Fprintf(w, "%-5s %s\n", StatusPass, label)
+			return
+		}
+	}
+	fmt.Fprintf(w, "%-5s %s (not requested — see --resources)\n", StatusWarn, label)
+}
+
 func writeInventorySummary(w io.Writer, inv *inventory.Inventory) {
 	fmt.Fprintln(w, "Appwrite Migration Guard — inventory")
 	fmt.Fprintln(w)
@@ -87,13 +105,13 @@ func writeInventorySummary(w io.Writer, inv *inventory.Inventory) {
 	fmt.Fprintln(w)
 
 	counts := inv.CountByType()
-	fmt.Fprintf(w, "%-5s %d database(s)\n", StatusPass, counts[inventory.ResourceDatabase])
-	fmt.Fprintf(w, "%-5s %d table(s)\n", StatusPass, counts[inventory.ResourceTable])
-	fmt.Fprintf(w, "%-5s %d bucket(s)\n", StatusPass, counts[inventory.ResourceBucket])
-	fmt.Fprintf(w, "%-5s %d file(s)\n", StatusPass, counts[inventory.ResourceFile])
-	fmt.Fprintf(w, "%-5s %d user(s)\n", StatusPass, counts[inventory.ResourceUser])
-	fmt.Fprintf(w, "%-5s %d function(s)\n", StatusPass, counts[inventory.ResourceFunction])
-	fmt.Fprintf(w, "%-5s %d site(s)\n", StatusPass, counts[inventory.ResourceSite])
+	writeCategoryCount(w, inv, "tables", fmt.Sprintf("%d database(s)", counts[inventory.ResourceDatabase]))
+	writeCategoryCount(w, inv, "tables", fmt.Sprintf("%d table(s)", counts[inventory.ResourceTable]))
+	writeCategoryCount(w, inv, "storage", fmt.Sprintf("%d bucket(s)", counts[inventory.ResourceBucket]))
+	writeCategoryCount(w, inv, "storage", fmt.Sprintf("%d file(s)", counts[inventory.ResourceFile]))
+	writeCategoryCount(w, inv, "users", fmt.Sprintf("%d user(s)", counts[inventory.ResourceUser]))
+	writeCategoryCount(w, inv, "functions", fmt.Sprintf("%d function(s)", counts[inventory.ResourceFunction]))
+	writeCategoryCount(w, inv, "sites", fmt.Sprintf("%d site(s)", counts[inventory.ResourceSite]))
 	fmt.Fprintln(w)
 
 	for _, r := range inv.Resources {

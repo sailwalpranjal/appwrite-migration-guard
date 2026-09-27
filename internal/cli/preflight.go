@@ -29,6 +29,7 @@ func RunPreflight(ctx context.Context, args []string, stdout, stderr io.Writer) 
 	fs.SetOutput(stderr)
 	concurrency := fs.Int("concurrency", inventory.DefaultConcurrency, "maximum concurrent Appwrite requests per side")
 	timeout := fs.Duration("timeout", preflightTimeout, "maximum time to allow the whole preflight run — raise this for large projects that don't finish within the default")
+	resources := fs.String("resources", "", resourcesFlagHelp)
 	if err := fs.Parse(args); err != nil {
 		return exitForParseError(err)
 	}
@@ -77,7 +78,7 @@ func RunPreflight(ctx context.Context, args []string, stdout, stderr io.Writer) 
 	dstAuthed := dstReachable && checkAuthenticated(runCtx, &list, "Destination", dstClient)
 
 	if srcAuthed && dstAuthed {
-		checkInventoryAndConflicts(runCtx, &list, srcClient, dstClient, srcEnv, dstEnv, *concurrency)
+		checkInventoryAndConflicts(runCtx, &list, srcClient, dstClient, srcEnv, dstEnv, *concurrency, parseResourcesFlag(*resources))
 	}
 
 	list.WriteTerminal(stdout, "Appwrite Migration Guard — preflight")
@@ -110,8 +111,8 @@ func checkAuthenticated(ctx context.Context, list *Checklist, label string, clie
 // already exist on the destination before any migration has run — a real
 // "destination conflict" risk (spec section 19), distinct from the
 // post-migration comparison amg verify does.
-func checkInventoryAndConflicts(ctx context.Context, list *Checklist, srcClient, dstClient *appwrite.Client, srcEnv, dstEnv config.Environment, concurrency int) {
-	opts := inventory.Options{Concurrency: concurrency, CountRows: false}
+func checkInventoryAndConflicts(ctx context.Context, list *Checklist, srcClient, dstClient *appwrite.Client, srcEnv, dstEnv config.Environment, concurrency int, resources []string) {
+	opts := inventory.Options{Concurrency: concurrency, CountRows: false, Resources: resources}
 
 	var srcInv, dstInv *inventory.Inventory
 	var srcErr, dstErr error
@@ -146,6 +147,13 @@ func checkInventoryAndConflicts(ctx context.Context, list *Checklist, srcClient,
 			list.Block("Destination conflict",
 				fmt.Sprintf("%s %q already exists in the destination project — migrating could fail or overwrite it", r.Type, r.ID))
 		}
+	} else if len(resources) > 0 {
+		// A --resources-narrowed run can only find conflicts in the
+		// categories it actually collected — an unqualified PASS here
+		// would otherwise read as "no conflicts anywhere," when
+		// categories outside the filter (which could hold a real
+		// colliding ID) were never inventoried on either side at all.
+		list.Pass(fmt.Sprintf("No destination resource ID conflicts in requested categories (%s) — other categories were not checked", strings.Join(resources, ", ")))
 	} else {
 		list.Pass("No destination resource ID conflicts")
 	}

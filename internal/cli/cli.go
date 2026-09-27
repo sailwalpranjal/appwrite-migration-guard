@@ -9,6 +9,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"strings"
 )
 
 // ExitCode mirrors the process exit codes amg promises in its docs.
@@ -61,6 +62,36 @@ func exitForParseError(err error) int {
 		return ExitOK
 	}
 	return ExitBlock
+}
+
+// resourcesFlagHelp is the shared --resources flag description used by
+// every command that inventories a project, so the wording (and the
+// category list) can't drift between commands.
+const resourcesFlagHelp = "comma-separated resource categories to collect (tables,storage,users,functions,sites); empty (default) collects all. Narrow this to match an API key's actual scopes instead of hitting a hard authorization failure for a category you were never granted access to and don't need."
+
+// parseResourcesFlag splits a --resources flag value on commas, trims
+// whitespace, and drops empty entries — "" (the default/unset value)
+// yields nil, meaning "collect everything" per inventory.Options.Resources.
+func parseResourcesFlag(v string) []string {
+	if strings.TrimSpace(v) == "" {
+		return nil
+	}
+	parts := strings.Split(v, ",")
+	seen := make(map[string]bool, len(parts))
+	out := make([]string, 0, len(parts))
+	for _, p := range parts {
+		p = strings.TrimSpace(p)
+		// Deduped here (not just left to inventory.Collect) so a
+		// careless "--resources tables,tables" doesn't produce a
+		// Options.Resources whose length alone would later make
+		// compare.Result.CoverageMismatch() report a false mismatch
+		// against an equivalent single-"tables" run on the other side.
+		if p != "" && !seen[p] {
+			seen[p] = true
+			out = append(out, p)
+		}
+	}
+	return out
 }
 
 // Lookup returns the command named name, if any.

@@ -12,6 +12,16 @@ import (
 // limits on shared/free-tier projects (spec section 23).
 const DefaultConcurrency = 4
 
+// ResourceCategories lists the names Options.Resources accepts, and the
+// order they're documented/collected in. Each corresponds to one Appwrite
+// scope group (see README's "Getting a project and API key to test
+// against"), so a caller with a narrowly-scoped API key — e.g. only
+// databases.read/tables.read/rows.read, which the README itself
+// recommends granting only what's needed — can request just "tables"
+// instead of hitting a hard authorization failure collecting resource
+// types it was never granted access to and never asked to check.
+var ResourceCategories = []string{"tables", "storage", "users", "functions", "sites"}
+
 // Options configures a Collect run.
 type Options struct {
 	// Concurrency bounds in-flight requests per collection phase. <= 0
@@ -29,13 +39,87 @@ type Options struct {
 	// (the default) disables sampling entirely: unlike row counts, this
 	// reads real row data, so it is opt-in, not just cheap-by-default.
 	SampleRows int
+	// Resources restricts collection to these categories (see
+	// ResourceCategories) — nil or empty means "all", the previous and
+	// still-default behavior. Requesting a category not in
+	// ResourceCategories is a configuration error, not a silently
+	// ignored typo. Any resource type collection is not restricted to
+	// here is never requested from Appwrite at all — not requested-
+	// then-discarded — so it needs no corresponding API key scope.
+	Resources []string
 }
 
 func (o Options) withDefaults() Options {
 	if o.Concurrency <= 0 {
 		o.Concurrency = DefaultConcurrency
 	}
+	o.Resources = dedupeStrings(o.Resources)
 	return o
+}
+
+// dedupeStrings returns a copy of in with duplicate entries removed,
+// order preserved. Options.Resources is deduped here — not left to
+// each caller — so a duplicate entry (however it got there: a careless
+// "--resources tables,tables", or a programmatic caller) can't produce
+// an Inventory.Collected whose length alone would make
+// compare.Result.CoverageMismatch() report a false mismatch against an
+// equivalent run whose Resources happened not to have the duplicate.
+func dedupeStrings(in []string) []string {
+	if len(in) == 0 {
+		return in
+	}
+	seen := make(map[string]bool, len(in))
+	out := make([]string, 0, len(in))
+	for _, s := range in {
+		if !seen[s] {
+			seen[s] = true
+			out = append(out, s)
+		}
+	}
+	return out
+}
+
+// wants reports whether category should be collected: true if Resources
+// is empty (collect everything, the default) or contains category.
+func (o Options) wants(category string) bool {
+	if len(o.Resources) == 0 {
+		return true
+	}
+	for _, r := range o.Resources {
+		if r == category {
+			return true
+		}
+	}
+	return false
+}
+
+// ValidateResources checks that every entry in resources is a known
+// ResourceCategories name, returning a descriptive error naming the
+// first invalid one instead of silently collecting nothing for it (a
+// typo like "table" instead of "tables" would otherwise mean that
+// category is quietly never checked).
+func ValidateResources(resources []string) error {
+	for _, r := range resources {
+		valid := false
+		for _, c := range ResourceCategories {
+			if r == c {
+				valid = true
+				break
+			}
+		}
+		if !valid {
+			return fmt.Errorf("unknown resource category %q (want one of: %s)", r, joinCategories())
+		}
+	}
+	return nil
+}
+
+func joinCategories() string {
+	out := ResourceCategories[0]
+	for _, c := range ResourceCategories[1:] {
+		out += ", " + c
+	}
+	return out
 }
 
 // Collect inventories every TablesDB database/table, Storage bucket/
@@ -54,23 +138,41 @@ func (o Options) withDefaults() Options {
 // docs/migration-semantics.md and the doc comment on
 // unsupportedResourceTypes in inventory.go.
 func Collect(ctx context.Context, client *appwrite.Client, endpoint, projectID string, opts Options) (*Inventory, error) {
+	if err := ValidateResources(opts.Resources); err != nil {
+		return nil, fmt.Errorf("inventory.Collect: %w", err)
+	}
 	opts = opts.withDefaults()
 	inv := New(endpoint, projectID)
+	if len(opts.Resources) > 0 {
+		inv.Collected = opts.Resources
+	} else {
+		inv.Collected = ResourceCategories
+	}
 
-	if err := collectTablesDB(ctx, client, inv, opts); err != nil {
-		return nil, err
+	if opts.wants("tables") {
+		if err := collectTablesDB(ctx, client, inv, opts); err != nil {
+			return nil, err
+		}
 	}
-	if err := collectStorage(ctx, client, inv, opts); err != nil {
-		return nil, err
+	if opts.wants("storage") {
+		if err := collectStorage(ctx, client, inv, opts); err != nil {
+			return nil, err
+		}
 	}
-	if err := collectUsers(ctx, client, inv); err != nil {
-		return nil, err
+	if opts.wants("users") {
+		if err := collectUsers(ctx, client, inv); err != nil {
+			return nil, err
+		}
 	}
-	if err := collectFunctions(ctx, client, inv); err != nil {
-		return nil, err
+	if opts.wants("functions") {
+		if err := collectFunctions(ctx, client, inv); err != nil {
+			return nil, err
+		}
 	}
-	if err := collectSites(ctx, client, inv); err != nil {
-		return nil, err
+	if opts.wants("sites") {
+		if err := collectSites(ctx, client, inv); err != nil {
+			return nil, err
+		}
 	}
 
 	inv.Sort()

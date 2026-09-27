@@ -29,6 +29,7 @@ func RunSnapshot(ctx context.Context, args []string, stdout, stderr io.Writer) i
 	sampleRows := fs.Int("sample-rows", 0, "fetch up to N rows per table and record a content digest for each; 0 disables sampling (default)")
 	concurrency := fs.Int("concurrency", inventory.DefaultConcurrency, "maximum concurrent Appwrite requests")
 	timeout := fs.Duration("timeout", snapshotTimeout, "maximum time to allow the whole snapshot run — raise this for large projects that don't finish within the default")
+	resources := fs.String("resources", "", resourcesFlagHelp)
 	if err := fs.Parse(args); err != nil {
 		return exitForParseError(err)
 	}
@@ -48,6 +49,7 @@ func RunSnapshot(ctx context.Context, args []string, stdout, stderr io.Writer) i
 		Concurrency: *concurrency,
 		CountRows:   !*noCounts,
 		SampleRows:  *sampleRows,
+		Resources:   parseResourcesFlag(*resources),
 	})
 	if err != nil {
 		fmt.Fprintln(stderr, "amg snapshot:", err.Error())

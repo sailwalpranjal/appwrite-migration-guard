@@ -46,6 +46,25 @@ saved `--json` result (and `amg report`) is self-describing about which
 policy classified its findings, rather than requiring the reader to
 already know how the run was invoked.
 
+## Resource category coverage
+
+`--resources` (on `inventory`/`snapshot`/`verify`/`preflight`) restricts
+which resource categories (`tables`, `storage`, `users`, `functions`,
+`sites`) a run collects at all — a category outside the filter is never
+requested from Appwrite, so a narrowly-scoped API key (e.g. only
+`databases.read`/`tables.read`/`rows.read`) doesn't hit a hard
+authorization failure on a category it was never granted and the caller
+never asked to check.
+
+Comparing two inventories collected with different `--resources` filters
+is meaningful but requires care: a resource type present on only the
+unfiltered side isn't real drift, it's a side that was never asked to
+check that category. `Result.SourceCollected`/`DestCollected` record
+what each side actually requested, and `Result.CoverageMismatch()`
+reports when they differ — surfaced as an explicit WARN-level note in
+both terminal and HTML output, separate from the Findings list, so it's
+never confused with an actual finding.
+
 ## Matching
 
 Resources are matched between source and destination by `(Type, ID)`

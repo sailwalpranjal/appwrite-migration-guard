@@ -108,6 +108,17 @@ type Inventory struct {
 	// Unsupported lists resource types amg does not yet collect, named
 	// explicitly rather than silently omitted (spec section 15).
 	Unsupported []string `json:"unsupported"`
+
+	// Collected lists the ResourceCategories actually requested for this
+	// run (see Options.Resources) — always all of ResourceCategories
+	// unless narrowed via --resources. Persisted so a saved manifest is
+	// self-describing about what it does and doesn't cover: comparing a
+	// manifest collected with --resources=tables against one collected
+	// without it would otherwise silently produce unexpected_resource
+	// findings for every Users/Functions/Sites/Storage resource on the
+	// unfiltered side, which looks like real drift but is actually just
+	// two runs that checked different things.
+	Collected []string `json:"collected_resources"`
 }
 
 // unsupportedResourceTypes are Appwrite resource categories amg does not

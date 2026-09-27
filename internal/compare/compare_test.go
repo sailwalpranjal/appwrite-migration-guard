@@ -70,6 +70,43 @@ func TestCompare_Idempotent(t *testing.T) {
 	}
 }
 
+// TestCompare_CoverageMismatch_DetectedWhenResourcesFilterDiffers is a
+// regression guard for the --resources filter: comparing an inventory
+// collected with Resources=["tables"] against one collected
+// unrestricted must surface that the two runs checked different
+// categories, since a resource type present only on the unfiltered
+// side would otherwise look like ordinary unexpected_resource drift
+// rather than "this side was never asked to check that category."
+func TestCompare_CoverageMismatch_DetectedWhenResourcesFilterDiffers(t *testing.T) {
+	src := inv(table("t1", "db1", "Widgets", nil, nil, 5))
+	src.Collected = []string{"tables"}
+	dst := inv(table("t1", "db1", "Widgets", nil, nil, 5))
+	dst.Collected = inventory.ResourceCategories
+
+	res := Compare("source", src, "dest", dst)
+	if !res.CoverageMismatch() {
+		t.Fatal("expected CoverageMismatch to be true when source/dest Collected differ")
+	}
+	if !equalStringSets(res.SourceCollected, []string{"tables"}) {
+		t.Fatalf("expected SourceCollected to carry through, got %v", res.SourceCollected)
+	}
+}
+
+// TestCompare_CoverageMismatch_FalseWhenSame proves the check doesn't
+// false-positive for two runs that collected the same categories,
+// regardless of slice order.
+func TestCompare_CoverageMismatch_FalseWhenSame(t *testing.T) {
+	src := inv(table("t1", "db1", "Widgets", nil, nil, 5))
+	src.Collected = []string{"tables", "storage"}
+	dst := inv(table("t1", "db1", "Widgets", nil, nil, 5))
+	dst.Collected = []string{"storage", "tables"}
+
+	res := Compare("source", src, "dest", dst)
+	if res.CoverageMismatch() {
+		t.Fatal("expected CoverageMismatch to be false for the same categories in a different order")
+	}
+}
+
 // Scenario A (spec section 33): destination missing a resource -> BLOCK.
 func TestCompare_MissingResource_Blocks(t *testing.T) {
 	src := inv(table("t1", "db1", "Widgets", nil, nil, 5))
