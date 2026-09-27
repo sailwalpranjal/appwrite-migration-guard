@@ -5,6 +5,8 @@ package cli
 
 import (
 	"context"
+	"errors"
+	"flag"
 	"fmt"
 	"io"
 )
@@ -25,16 +27,40 @@ type Command struct {
 }
 
 // Commands is the registry of all top-level amg subcommands, in help
-// display order.
+// display order. This order deliberately matches the README's Quick
+// Start / Example workflow walkthrough (doctor -> inventory -> snapshot
+// -> compare -> verify -> preflight -> report), not alphabetical or
+// registration order — a PM-level release-readiness review flagged the
+// previous mismatch as an avoidable "did I miss a step" moment for
+// someone running `amg --help` right after cloning the repo and then
+// following the README tutorial. version is listed last since it's not
+// part of the migration-verification workflow itself.
 var Commands = []Command{
-	{Name: "version", Summary: "Print amg's version", Run: RunVersion},
 	{Name: "doctor", Summary: "Check that amg itself is configured correctly", Run: RunDoctor},
 	{Name: "inventory", Summary: "Inventory resources in a single Appwrite project", Run: RunInventory},
-	{Name: "preflight", Summary: "Check source/destination compatibility before a migration", Run: RunPreflight},
 	{Name: "snapshot", Summary: "Write a deterministic manifest of a project's resources", Run: RunSnapshot},
-	{Name: "verify", Summary: "Compare source, expected, and destination state after a migration", Run: RunVerify},
-	{Name: "report", Summary: "Render a saved compare/verify result as text, JSON, or HTML", Run: RunReport},
 	{Name: "compare", Summary: "Compare two local manifests without any network access", Run: RunCompare},
+	{Name: "verify", Summary: "Compare source, expected, and destination state after a migration", Run: RunVerify},
+	{Name: "preflight", Summary: "Check source/destination compatibility before a migration", Run: RunPreflight},
+	{Name: "report", Summary: "Render a saved compare/verify result as text, JSON, or HTML", Run: RunReport},
+	{Name: "version", Summary: "Print amg's version", Run: RunVersion},
+}
+
+// exitForParseError maps a flag.FlagSet.Parse error to an exit code.
+// -h/--help intentionally exits ExitOK: it's a successful request for
+// usage text, not a failure, matching what the top-level `amg --help`
+// already does in cmd/amg/main.go. Before this, every subcommand's
+// `fs.Parse` error path returned ExitBlock unconditionally, so
+// `amg inventory --help` printed correct usage text but exited 2 —
+// identical to a real failure, and indistinguishable from one by any
+// script or CI step checking the exit code. Caught by a PM-level
+// release-readiness review, not by any prior test, because no test
+// asserted on --help's exit code specifically.
+func exitForParseError(err error) int {
+	if errors.Is(err, flag.ErrHelp) {
+		return ExitOK
+	}
+	return ExitBlock
 }
 
 // Lookup returns the command named name, if any.

@@ -32,7 +32,7 @@ func RunInventory(ctx context.Context, args []string, stdout, stderr io.Writer) 
 	sampleRows := fs.Int("sample-rows", 0, "fetch up to N rows per table (ordered by $id) and record a content digest for each; 0 disables sampling (default). This reads real row data — opt in deliberately.")
 	concurrency := fs.Int("concurrency", inventory.DefaultConcurrency, "maximum concurrent Appwrite requests")
 	if err := fs.Parse(args); err != nil {
-		return ExitBlock
+		return exitForParseError(err)
 	}
 
 	_ = config.LoadDotEnv(".env")

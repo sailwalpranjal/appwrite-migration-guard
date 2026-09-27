@@ -112,3 +112,110 @@ func TestWriteHTML_ValidDoctypeAndTitle(t *testing.T) {
 		t.Fatal("expected <html lang=\"en\"> for accessibility")
 	}
 }
+
+// TestWriteHTML_FilterToolbarPresentWithFindings is a regression guard
+// for the client-side filter/search toolbar added after a design review
+// flagged the report as having no way to navigate a large findings list.
+// Each row must carry the data attributes the vanilla-JS filter reads.
+func TestWriteHTML_FilterToolbarPresentWithFindings(t *testing.T) {
+	res := &compare.Result{
+		SourceLabel: "a", DestLabel: "b",
+		Findings: []compare.Finding{
+			{Severity: compare.SeverityBlock, Rule: "missing_resource", ResourceType: inventory.ResourceTable, ResourceID: "t1", Message: "gone"},
+		},
+	}
+	var buf bytes.Buffer
+	if err := WriteHTML(&buf, res); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	out := buf.String()
+	for _, want := range []string{
+		`data-severity="PASS"`, `data-severity="WARN"`, `data-severity="BLOCK"`,
+		`id="search"`, `id="result-count"`,
+		`data-severity="BLOCK" data-search="block missing_resource table t1  gone"`,
+	} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("expected filter toolbar output to contain %q, got:\n%s", want, out)
+		}
+	}
+}
+
+// TestWriteHTML_FilterToolbarAbsentWithoutFindings ensures the toolbar
+// (and its JS, which assumes #findings-table exists) is only emitted
+// when there's something to filter — matching the existing "No
+// differences found" empty state.
+func TestWriteHTML_FilterToolbarAbsentWithoutFindings(t *testing.T) {
+	res := &compare.Result{SourceLabel: "a", DestLabel: "b"}
+	var buf bytes.Buffer
+	if err := WriteHTML(&buf, res); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	out := buf.String()
+	if strings.Contains(out, `id="toolbar"`) {
+		t.Fatalf("expected no filter toolbar when there are no findings, got:\n%s", out)
+	}
+}
+
+// TestWriteHTML_ResourceBreakdown_CountsBySeverityAndType is a
+// regression guard for the per-resource-type findings breakdown table,
+// which must count WARN/BLOCK per ResourceType and never emit a row for
+// PASS (Findings never carries SeverityPass — see resourceTypeCount's
+// doc comment).
+func TestWriteHTML_ResourceBreakdown_CountsBySeverityAndType(t *testing.T) {
+	res := &compare.Result{
+		SourceLabel: "a", DestLabel: "b",
+		Findings: []compare.Finding{
+			{Severity: compare.SeverityBlock, Rule: "r1", ResourceType: inventory.ResourceTable, ResourceID: "t1", Message: "m"},
+			{Severity: compare.SeverityBlock, Rule: "r2", ResourceType: inventory.ResourceTable, ResourceID: "t2", Message: "m"},
+			{Severity: compare.SeverityWarn, Rule: "r3", ResourceType: inventory.ResourceBucket, ResourceID: "b1", Message: "m"},
+		},
+	}
+	var buf bytes.Buffer
+	if err := WriteHTML(&buf, res); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	out := buf.String()
+	if !strings.Contains(out, "<td>table</td><td>0</td><td>2</td>") {
+		t.Fatalf("expected table row with 0 warn / 2 block, got:\n%s", out)
+	}
+	if !strings.Contains(out, "<td>bucket</td><td>1</td><td>0</td>") {
+		t.Fatalf("expected bucket row with 1 warn / 0 block, got:\n%s", out)
+	}
+}
+
+// TestWriteHTML_ResourceBreakdown_AbsentWhenNoFindings ensures the
+// breakdown table (and its caption explaining PASS is never a row) only
+// renders when there's something to break down.
+func TestWriteHTML_ResourceBreakdown_AbsentWhenNoFindings(t *testing.T) {
+	res := &compare.Result{SourceLabel: "a", DestLabel: "b"}
+	var buf bytes.Buffer
+	if err := WriteHTML(&buf, res); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	out := buf.String()
+	if strings.Contains(out, `class="breakdown"`) {
+		t.Fatalf("expected no breakdown table when there are no findings, got:\n%s", out)
+	}
+}
+
+// TestWriteHTML_ThemeToggleAndResponsiveTable checks the explicit
+// light/dark toggle machinery and the table's overflow-x wrapper (a
+// design-review finding: an unwrapped table breaks on narrow viewports).
+func TestWriteHTML_ThemeToggleAndResponsiveTable(t *testing.T) {
+	res := &compare.Result{
+		SourceLabel: "a", DestLabel: "b",
+		Findings: []compare.Finding{
+			{Severity: compare.SeverityBlock, Rule: "r1", ResourceType: inventory.ResourceTable, ResourceID: "t1", Message: "m"},
+		},
+	}
+	var buf bytes.Buffer
+	if err := WriteHTML(&buf, res); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	out := buf.String()
+	for _, want := range []string{`id="theme-toggle"`, "localStorage", "data-theme", `class="table-wrap"`} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("expected output to contain %q, got:\n%s", want, out)
+		}
+	}
+}

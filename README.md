@@ -7,16 +7,16 @@
 
 **Verify Appwrite changes before they become incidents.**
 
-> **Status: pre-alpha, but every command is real and live-verified.**
-> All 8 commands work end to end against a live Appwrite Cloud project —
-> every resource type from the original spec (TablesDB, Storage, Users,
-> Functions, Sites) is inventoried and compared, with a documented,
-> tested boundary on what's deliberately never collected (passwords,
-> emails, function/site environment variables — see
-> [Limitations](#limitations)). Nine separate live-verification passes
-> are logged under [Testing](#testing), each introducing a real change
-> and confirming amg caught it. This README describes what exists today
-> — see [Roadmap](#roadmap) for what's still open.
+> **Status: pre-alpha.** All 8 commands work end to end against a live
+> Appwrite Cloud project. Every resource type from the original spec
+> (TablesDB, Storage, Users, Functions, Sites) is inventoried and
+> compared; what's deliberately never collected (passwords, emails,
+> function/site environment variables) is listed under
+> [Limitations](#limitations). Ten live-verification passes are logged
+> under [Testing](#testing), each introducing a real change and
+> confirming amg caught it. See [Roadmap](#roadmap) for what's still
+> open, and [docs/assurance-boundary.md](docs/assurance-boundary.md) for
+> what a PASS result does and doesn't prove.
 
 ## The problem
 
@@ -87,6 +87,13 @@ git clone https://github.com/sailwalpranjal/appwrite-migration-guard
 cd appwrite-migration-guard
 go build -o amg ./cmd/amg
 ```
+
+`go install github.com/sailwalpranjal/appwrite-migration-guard/cmd/amg@latest`
+does **not** work yet — no tag has been pushed, so there is no `@latest`
+version for the Go module proxy to resolve, and it will fail with a "no
+matching versions" error. Until the first tag, use
+`go install github.com/sailwalpranjal/appwrite-migration-guard/cmd/amg@main`
+instead, or clone and `go build` as above.
 
 Release automation (`.goreleaser.yaml`, `.github/workflows/release.yml`,
 [GoReleaser](https://goreleaser.com)) is in place to build Linux/macOS/
@@ -296,53 +303,32 @@ go vet ./...
 go test ./...
 ```
 
-All claims of "supported" or "tested" in this repository are backed by the
-tests in the corresponding package — see `*_test.go` files next to the
-code they test. Beyond mocked-HTTP tests, amg's core loop has been run
-nine times against a live Appwrite Cloud project. TablesDB: create a
-database + table, snapshot it as "source", change its permissions and a
-config flag, snapshot again as "destination", `amg compare` the two
-manifests (correctly reported both changes and nothing else), delete the
-table entirely and confirm `missing_resource` fires, then run `amg
-verify` live against the same project as both source and destination
-(correctly reported PASS). Storage: create a bucket + upload a file,
-snapshot as "source", delete and re-upload the same file ID with
-different content, snapshot as "destination", `amg compare` correctly
-reported `content_changed` with the exact before/after MD5 signatures —
-without amg ever downloading the file. Preflight: created a database,
-pointed `AMG_SOURCE_*`/`AMG_DEST_*` at the same project, and confirmed
-`amg preflight` correctly reported a `Destination conflict` BLOCK for the
-already-existing database ID; also confirmed it reports the specific "API
-key was rejected" reason (not a generic error) when given bad
-credentials. Row sampling: created a table with two rows, snapshotted
-with `--sample-rows 10` as "source", edited one row's content, snapshotted
-again as "destination" — `amg compare` correctly reported
-`row_content_changed` naming the changed row and its before/after
-digests, with the unchanged row and both rows' `$updatedAt` drift
-correctly producing no finding. Reporting: piped a real `amg compare
---json` result (a permission + config change on a live table) through
-`amg report --format html` and inspected the output file directly — a
-complete, valid HTML document with both findings rendered, auto-escaped,
-and no external resource references. Users: created a real user (whose
-raw Appwrite response, confirmed by inspecting it directly, included a
-live argon2 password hash and email address), ran `amg inventory --json`
-and grepped the output for the hash/email/phone — zero matches, confirmed
-absent from both the JSON and the saved manifest file. Disabled the user
-and added a label, snapshotted again, and `amg compare` correctly
-reported both changes (`enabled`, `labels`) with no PII anywhere in
-either manifest. Functions: created a real function (whose raw Appwrite
-response included an explicit `"vars":[]` field, confirming the shape
-amg's exclusion is designed against), snapshotted as "source", changed
-its schedule and execute permissions, snapshotted as "destination" —
-`amg compare` correctly reported both changes, and grepping both
-manifests for `vars`/secret-shaped strings found nothing. Sites: created
-a real site, snapshotted, changed its logging flag/build command/output
-directory, snapshotted again — `amg compare` correctly reported all
-three changes with no `vars` leakage. Legacy Databases: created a
-database via `POST /v1/tablesdb`, fetched it via `GET /v1/databases`
-(the legacy list endpoint) and confirmed the response was byte-for-byte
-identical — proving amg needs no separate legacy collector, not just
-inferring it from source. All test resources were deleted afterward.
+Every "supported"/"tested" claim in this repository traces to a test in
+the corresponding package (`*_test.go` next to the code it tests) or to
+one of the live runs below, against a real Appwrite Cloud project — not
+mocked HTTP. Each row is one thing actually done, once, with a specific
+observed result:
+
+| Area | What was done | Result observed |
+|---|---|---|
+| TablesDB | Created a database + table, snapshotted as source, changed permissions and a config flag, snapshotted as destination, `amg compare` | Both changes reported, nothing else |
+| TablesDB | Deleted the table, `amg compare` | `missing_resource` fired |
+| TablesDB | `amg verify` live against the same project as both source and destination | PASS |
+| Table schema | Created a table with a string column, widened its `size` (50 -> 100), snapshotted before/after, `amg compare` | `schema_changed` (BLOCK) with the two differing digests; comparing a manifest against itself stayed PASS |
+| Storage | Created a bucket + file, snapshotted, deleted and re-uploaded the same file ID with different content, snapshotted, `amg compare` | `content_changed` with the exact before/after MD5 signatures — without amg downloading the file |
+| Preflight | Pointed `AMG_SOURCE_*`/`AMG_DEST_*` at the same project | `Destination conflict` BLOCK for the already-existing database ID |
+| Preflight | Ran with bad credentials | The specific "API key was rejected" reason, not a generic error |
+| Row sampling | Table with two rows, `--sample-rows 10`, edited one row, re-snapshotted, `amg compare` | `row_content_changed` naming the changed row and its before/after digests; the unchanged row and both rows' `$updatedAt` drift produced no finding |
+| Reporting | Piped a real `amg compare --json` result through `amg report --format html`, inspected the file | Valid HTML, both findings rendered, auto-escaped, no external resource references |
+| Users | Created a user (raw Appwrite response included a live argon2 password hash and email), `amg inventory --json`, grepped for hash/email/phone | Zero matches, in both the JSON and the saved manifest |
+| Users | Disabled the user, added a label, re-snapshotted, `amg compare` | Both changes (`enabled`, `labels`) reported, no PII in either manifest |
+| Functions | Created a function (raw response included `"vars":[]`), snapshotted, changed schedule and execute permissions, re-snapshotted, `amg compare` | Both changes reported; grepping both manifests for `vars`/secret-shaped strings found nothing |
+| Sites | Created a site, snapshotted, changed logging flag/build command/output directory, re-snapshotted, `amg compare` | All three changes reported, no `vars` leakage |
+| Legacy Databases | Created a database via `POST /v1/tablesdb`, fetched it via `GET /v1/databases` (the legacy list endpoint) | Byte-for-byte identical response — confirms amg needs no separate legacy collector |
+
+All test resources were deleted afterward. Ten live-verification passes
+total (nine from before this stage, plus the schema-digest run above);
+see `CHANGELOG.md` for the exact date/commit of each.
 
 ## Migration lab
 
@@ -456,7 +442,8 @@ every push (`.github/workflows/ci.yml`).
 
 ## Contributing
 
-See [CONTRIBUTING.md](CONTRIBUTING.md). Issues and PRs welcome; please
+See [CONTRIBUTING.md](CONTRIBUTING.md) and the
+[Code of Conduct](CODE_OF_CONDUCT.md). Issues and PRs welcome; please
 open an issue before large changes.
 
 ## License

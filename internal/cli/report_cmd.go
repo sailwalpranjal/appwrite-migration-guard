@@ -25,7 +25,7 @@ func RunReport(_ context.Context, args []string, stdout, stderr io.Writer) int {
 	format := fs.String("format", "text", "output format: text, json, or html")
 	out := fs.String("out", "", "write the report to this file instead of stdout")
 	if err := fs.Parse(args); err != nil {
-		return ExitBlock
+		return exitForParseError(err)
 	}
 	rest := fs.Args()
 	if len(rest) != 1 {

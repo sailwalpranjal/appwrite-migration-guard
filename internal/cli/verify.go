@@ -30,7 +30,7 @@ func RunVerify(ctx context.Context, args []string, stdout, stderr io.Writer) int
 	concurrency := fs.Int("concurrency", inventory.DefaultConcurrency, "maximum concurrent Appwrite requests per side")
 	strict := fs.Bool("strict", false, "use the strict policy: an unexpected destination resource is BLOCK instead of WARN (see docs/comparison-model.md#policy)")
 	if err := fs.Parse(args); err != nil {
-		return ExitBlock
+		return exitForParseError(err)
 	}
 
 	_ = config.LoadDotEnv(".env")
