@@ -21,7 +21,7 @@ func RunCompare(_ context.Context, args []string, stdout, stderr io.Writer) int 
 	jsonOut := fs.Bool("json", false, "print the comparison result as JSON instead of a terminal summary")
 	strict := fs.Bool("strict", false, "use the strict policy: an unexpected destination resource is BLOCK instead of WARN (see docs/comparison-model.md#policy)")
 	if err := fs.Parse(args); err != nil {
-		return ExitBlock
+		return exitForParseError(err)
 	}
 	rest := fs.Args()
 	if len(rest) != 2 {

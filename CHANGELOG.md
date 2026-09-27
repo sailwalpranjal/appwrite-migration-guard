@@ -7,6 +7,64 @@ follows [Keep a Changelog](https://keepachangelog.com/).
 
 ### Added
 
+- HTML report redesign, driven by an independent design review: badges
+  now fill with a tinted background instead of outline-only, table rows
+  get zebra striping and hover state, a sticky client-side filter/search
+  toolbar (vanilla JS, degrades to the full unfiltered table with JS
+  off) lets you toggle PASS/WARN/BLOCK and search rule/resource/message
+  text, an explicit light/dark theme toggle persists via localStorage
+  (wrapped in try/catch since it must survive `file://`) alongside the
+  existing automatic `prefers-color-scheme`, a per-resource-type
+  findings breakdown table was added, WARN/BLOCK colors in dark mode
+  were changed from unchanged light-mode hex values to GitHub's own
+  darker-background-appropriate tokens, and the findings table is now
+  wrapped for horizontal scroll instead of breaking on narrow viewports.
+  Live-verified: generated a real report from a real compare run against
+  a live Appwrite project (permission + config + unexpected-resource
+  drift) and screenshotted it with headless Chrome in both system-dark
+  and forced-light rendering.
+- Fixed a P0 bug an external PM-level release-readiness review found:
+  every subcommand's `-h`/`--help` printed correct usage text but
+  exited 2 (`ExitBlock`) — identical to a real failure, and
+  indistinguishable from one by any script or CI step checking the exit
+  code. `amg <cmd> --help`/`-h` now exits 0, verified for all six
+  flag-parsing subcommands both live and in a new
+  `TestSubcommands_Help_ExitsOK`; a companion
+  `TestSubcommands_UnknownFlag_StillBlocks` proves a genuine parse error
+  still exits BLOCK.
+- Reordered `amg --help`'s command list to match the README's Quick
+  Start / Example workflow order (doctor -> inventory -> snapshot ->
+  compare -> verify -> preflight -> report), closing a mismatch the same
+  PM review flagged as an avoidable "did I miss a step" moment.
+- `.github/ISSUE_TEMPLATE/` (bug report, verified-API-behavior report),
+  `.github/PULL_REQUEST_TEMPLATE.md`, and `CODE_OF_CONDUCT.md`
+  (Contributor Covenant v2.1) — all flagged as missing by the same
+  review for a project explicitly trying to get real GitHub adoption.
+- README: documented `go install ...@main` (the only install path that
+  currently works via the Go module proxy, since no tag has been pushed
+  yet — `@latest` fails).
+
+### Changed
+
+- README's status blurb and testing section were rewritten for tone, at
+  the user's explicit request, after a second external audit flagged
+  "extensive defensive qualification" as an AI-authorship fingerprint
+  worth challenging regardless of actual authorship. The dense,
+  paragraph-form description of nine live-verification runs became a
+  table (same facts, same evidence, no content removed), and repeated
+  self-rebutting phrasing ("but every command is real...") was cut in
+  favor of plain statements with links to the evidence.
+
+### Investigated
+
+- Ran a read-only audit for fake/hardcoded/stubbed logic across
+  internal/, cmd/, and lab/ in response to the user's explicit request
+  ("no hard-coded fake data should be there"). No findings: every
+  conditional branch traced back to real logic, no TODO/stub/placeholder
+  comments exist, the only recurring "magic number" (5000, Appwrite's
+  own row-count cap) is documented at each use site, and every
+  README/--help-documented command traces to a real implementation.
+
 - Pagination now detects any duplicated or empty resource ID across the
   *entire* paginated result, not just a check on each page's last item.
   Closes a specific gap from a second external audit: the previous guard

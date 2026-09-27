@@ -29,7 +29,7 @@ func RunPreflight(ctx context.Context, args []string, stdout, stderr io.Writer) 
 	fs.SetOutput(stderr)
 	concurrency := fs.Int("concurrency", inventory.DefaultConcurrency, "maximum concurrent Appwrite requests per side")
 	if err := fs.Parse(args); err != nil {
-		return ExitBlock
+		return exitForParseError(err)
 	}
 
 	_ = config.LoadDotEnv(".env")
