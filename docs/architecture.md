@@ -173,6 +173,20 @@ could keep retry-scenario tests fast without needing package-private
 access to the `backoff` field the way internal tests already have. Runs
 in CI on every push.
 
+## Release automation
+
+`.goreleaser.yaml` + `.github/workflows/release.yml`: on a `vX.Y.Z` tag
+push, [GoReleaser](https://goreleaser.com) cross-compiles `amg` for
+linux/darwin/windows × amd64/arm64 (Windows/arm64 excluded), injects
+`internal/version.{Version,Commit,Date}` via `-ldflags`, archives each
+binary with `README.md`/`LICENSE`/`CHANGELOG.md`/`.env.example`,
+computes checksums, and publishes a GitHub Release marked `prerelease`
+(amg is pre-alpha). Validated locally end-to-end with `goreleaser build
+--snapshot` and `goreleaser release --snapshot --skip=publish`: all 5
+targets build, archive correctly, and the resulting binary runs and
+reports the correct injected version — not just config-checked, actually
+executed.
+
 ## What is deliberately not here yet
 
 No inventory (and therefore no comparison) of legacy Databases
