@@ -55,6 +55,26 @@ func TestRunCompare_MissingResource_Blocks(t *testing.T) {
 	}
 }
 
+// TestRunCompare_AmbiguousLabels_PrintsAdvisory is a regression guard:
+// two manifests both left at `amg snapshot`'s default "target" label
+// must not silently produce unreadable messages like "exists in target
+// but is missing in target" — the terminal output must call this out.
+func TestRunCompare_AmbiguousLabels_PrintsAdvisory(t *testing.T) {
+	dir := t.TempDir()
+	res := inventory.Resource{Type: inventory.ResourceDatabase, ID: "db1", Name: "Main"}
+	a := writeTestManifest(t, filepath.Join(dir, "a"), "target", res)
+	b := writeTestManifest(t, filepath.Join(dir, "b"), "target")
+
+	var stdout, stderr bytes.Buffer
+	code := RunCompare(context.Background(), []string{a, b}, &stdout, &stderr)
+	if code != ExitBlock {
+		t.Fatalf("expected ExitBlock, got %d; stdout:\n%s", code, stdout.String())
+	}
+	if !bytes.Contains(stdout.Bytes(), []byte("both carry the label")) {
+		t.Fatalf("expected an ambiguous-label advisory in output:\n%s", stdout.String())
+	}
+}
+
 func TestRunCompare_MissingArgs(t *testing.T) {
 	var stdout, stderr bytes.Buffer
 	code := RunCompare(context.Background(), []string{"only-one.json"}, &stdout, &stderr)

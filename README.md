@@ -255,6 +255,15 @@ hits `context deadline exceeded` against real data.
    `AMG_DEST_*` pair if you have two projects to compare), then
    `./amg doctor` to confirm it connects.
 
+   **Region mismatch is the most common `doctor`/`preflight` failure**:
+   Appwrite Cloud projects are pinned to one region (`fra`, `nyc`, `syd`,
+   ...), and pointing `APPWRITE_ENDPOINT` at the wrong one returns a 401
+   that reads like an authentication failure even though the key is
+   completely valid. `amg doctor` calls this out by name — "Project is
+   not accessible in this region" — rather than reporting a bare 401;
+   fix it by copying the exact Endpoint shown on the project's Overview
+   page, not a guessed or reused one from a different project.
+
 **Self-hosted Appwrite**, if you'd rather run the source you're
 comparing locally: follow Appwrite's own
 [self-hosting installation guide](https://appwrite.io/docs/advanced/self-hosting/installation),
@@ -390,10 +399,21 @@ observed result:
 | Functions | Created a function (raw response included `"vars":[]`), snapshotted, changed schedule and execute permissions, re-snapshotted, `amg compare` | Both changes reported; grepping both manifests for `vars`/secret-shaped strings found nothing |
 | Sites | Created a site, snapshotted, changed logging flag/build command/output directory, re-snapshotted, `amg compare` | All three changes reported, no `vars` leakage |
 | Legacy Databases | Created a database via `POST /v1/tablesdb`, fetched it via `GET /v1/databases` (the legacy list endpoint) | Byte-for-byte identical response — confirms amg needs no separate legacy collector |
+| Full acceptance run | Provisioned a realistic mid-sized project via the real API (1 database, 3 tables with 11 columns/3 indexes/9 rows, a storage bucket with 2 files, 3 users with a disabled account and a label, 1 function, 1 site), ran `doctor`/`inventory`/`snapshot`/`preflight`/`verify`/`compare` against it | `doctor`/`inventory`/`verify` PASS on the untouched project; `preflight` with source=destination correctly BLOCKed on all 12 resource ID conflicts |
+| Regression coverage | From that same project, in one pass: widened a column, changed table permissions, edited a row, deleted a table, replaced a file's content, changed a function's schedule, cleared a site's install command, changed its build command, added an extra row, added an extra function | `amg compare` reported exactly the 11 corresponding findings (`schema_changed`, `permission_changed`, `row_content_changed`, `missing_resource`, `content_changed`+`name_changed`, `config_changed` x3, `row_count_mismatch`, `row_sample_unexpected`) and nothing else — no false positives, no missed findings |
+| Policy | Same extra-function scenario, compared once under the default policy and once with `--strict` | `unexpected_resource`/`row_sample_unexpected` are WARN under default, BLOCK under `--strict` — same finding, correct severity both times |
+| Endpoint region mismatch | Pointed a valid project/key pair at the wrong Appwrite Cloud region's endpoint (`fra` instead of the project's actual `nyc`), ran `amg doctor` | Reproduced Appwrite's `general_access_forbidden` 401 ("Project is not accessible in this region"); fixed amg to append a concrete, actionable explanation instead of a bare error string (see Changelog) |
+| Ambiguous manifest labels | Snapshotted the same project twice without `--label` (both default to `"target"`), ran `amg compare` | Reproduced an unreadable `"exists in target but is missing in target"` message; fixed amg to print an explicit advisory in text, JSON-driven HTML, and to expose `AmbiguousLabels()` for callers (see Changelog) |
 
-All test resources were deleted afterward. Ten live-verification passes
-total (nine from before this stage, plus the schema-digest run above);
-see `CHANGELOG.md` for the exact date/commit of each.
+Every row above through "Legacy Databases" used a throwaway dev project
+with its test resources deleted afterward. The last four rows used a
+separate, dedicated Appwrite Cloud project provisioned specifically as a
+standing acceptance-test fixture (a realistic mid-sized "TaskFlow"
+project-management app — see `docs/acceptance-test-fixture.md`) and left
+in place for future regression runs, not deleted. Fourteen live-
+verification passes total (ten from before this stage, plus the four
+acceptance-run rows above); see `CHANGELOG.md` for the exact date/commit
+of each.
 
 ## Migration lab
 

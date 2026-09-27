@@ -36,6 +36,11 @@ func writeCompareTerminal(w io.Writer, title string, res *compare.Result) {
 		fmt.Fprintln(w, "      a category present on only one side won't produce a reliable missing/unexpected finding for that category.")
 		fmt.Fprintln(w)
 	}
+	if res.AmbiguousLabels() {
+		fmt.Fprintf(w, "WARN  source and destination manifests both carry the label %q\n", res.SourceLabel)
+		fmt.Fprintln(w, "      findings below can't distinguish the two sides by name — re-run `amg snapshot --label source` / `--label destination` for clearer output.")
+		fmt.Fprintln(w)
+	}
 
 	if len(res.Findings) == 0 {
 		fmt.Fprintf(w, "%-5s no differences found\n", StatusPass)

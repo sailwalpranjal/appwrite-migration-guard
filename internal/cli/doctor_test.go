@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -62,6 +63,38 @@ func TestRunDoctor_HealthyEndpoint(t *testing.T) {
 	code := RunDoctor(context.Background(), nil, &stdout, &stderr)
 	if code != ExitOK {
 		t.Fatalf("expected ExitOK, got %d; output:\n%s", code, stdout.String())
+	}
+}
+
+// TestRunDoctor_RegionMismatch_ExplainsCause is a regression guard for a
+// real-world failure mode reproduced live against Appwrite Cloud 2.3.0: a
+// valid project/key pointed at the wrong region's endpoint gets a 401 from
+// the unauthenticated /health/version call, which looks like a network
+// problem but is actually a routing mismatch. amg must surface Appwrite's
+// own explanation plus a concrete fix, not a bare "401" string.
+func TestRunDoctor_RegionMismatch_ExplainsCause(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusUnauthorized)
+		json.NewEncoder(w).Encode(map[string]any{
+			"message": "Project is not accessible in this region. Please make sure you are using the correct endpoint",
+			"code":    401,
+			"type":    "general_access_forbidden",
+			"version": "2.3.0",
+		})
+	}))
+	defer srv.Close()
+
+	withEnv(t, srv.URL, "proj1", "key1")
+	var stdout, stderr bytes.Buffer
+	code := RunDoctor(context.Background(), nil, &stdout, &stderr)
+	if code != ExitBlock {
+		t.Fatalf("expected ExitBlock, got %d; output:\n%s", code, stdout.String())
+	}
+	out := stdout.String()
+	for _, want := range []string{"not accessible in this region", "wrong Appwrite Cloud region"} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("expected output to contain %q, got:\n%s", want, out)
+		}
 	}
 }
 
