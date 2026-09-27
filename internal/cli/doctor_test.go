@@ -65,6 +65,50 @@ func TestRunDoctor_HealthyEndpoint(t *testing.T) {
 	}
 }
 
+// TestRunDoctor_JSONFlag_ProducesValidChecklistResult is a regression
+// guard for a real documented limitation: `amg report`'s HTML output
+// previously covered `compare`/`verify` results only, because `doctor`
+// and `preflight` had no --json output at all to feed it in the first
+// place. Proves --json produces a well-formed ChecklistResult with the
+// schema version and command name `amg report` needs to render it.
+func TestRunDoctor_JSONFlag_ProducesValidChecklistResult(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/health/version":
+			json.NewEncoder(w).Encode(appwrite.VersionInfo{Version: "2.3.0"})
+		case "/health":
+			json.NewEncoder(w).Encode(appwrite.HealthStatus{Name: "http", Status: "pass"})
+		default:
+			w.WriteHeader(http.StatusNotFound)
+		}
+	}))
+	defer srv.Close()
+
+	withEnv(t, srv.URL, "proj1", "key1")
+	var stdout, stderr bytes.Buffer
+	code := RunDoctor(context.Background(), []string{"--json"}, &stdout, &stderr)
+	if code != ExitOK {
+		t.Fatalf("expected ExitOK, got %d; stderr:\n%s", code, stderr.String())
+	}
+
+	var res ChecklistResult
+	if err := json.Unmarshal(stdout.Bytes(), &res); err != nil {
+		t.Fatalf("expected valid JSON, got error %v; output:\n%s", err, stdout.String())
+	}
+	if res.SchemaVersion != ChecklistSchemaVersion {
+		t.Fatalf("expected schema_version %d, got %d", ChecklistSchemaVersion, res.SchemaVersion)
+	}
+	if res.Command != "doctor" {
+		t.Fatalf("expected command %q, got %q", "doctor", res.Command)
+	}
+	if res.Overall != StatusPass {
+		t.Fatalf("expected overall PASS, got %s", res.Overall)
+	}
+	if len(res.Checks) == 0 {
+		t.Fatal("expected at least one check")
+	}
+}
+
 // TestRunDoctor_TimeoutFlag_IsConfigurable is a regression guard for a
 // real launch-readiness gap: every live-network command's deadline
 // (doctorTimeout, inventoryTimeout, etc.) was a hardcoded constant with

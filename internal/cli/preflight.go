@@ -30,6 +30,7 @@ func RunPreflight(ctx context.Context, args []string, stdout, stderr io.Writer) 
 	concurrency := fs.Int("concurrency", inventory.DefaultConcurrency, "maximum concurrent Appwrite requests per side")
 	timeout := fs.Duration("timeout", preflightTimeout, "maximum time to allow the whole preflight run — raise this for large projects that don't finish within the default")
 	resources := fs.String("resources", "", resourcesFlagHelp)
+	jsonOut := fs.Bool("json", false, "print the checklist as JSON instead of a terminal summary — feed the saved file to `amg report` for text/json/html rendering")
 	if err := fs.Parse(args); err != nil {
 		return exitForParseError(err)
 	}
@@ -52,8 +53,7 @@ func RunPreflight(ctx context.Context, args []string, stdout, stderr io.Writer) 
 	}
 	if list.Overall() == StatusBlock {
 		// Nothing further can run without credentials on both sides.
-		list.WriteTerminal(stdout, "Appwrite Migration Guard — preflight")
-		return list.ExitCode()
+		return finishChecklist(&list, "preflight", "Appwrite Migration Guard — preflight", *jsonOut, stdout, stderr)
 	}
 
 	runCtx, cancel := context.WithTimeout(ctx, *timeout)
@@ -81,8 +81,7 @@ func RunPreflight(ctx context.Context, args []string, stdout, stderr io.Writer) 
 		checkInventoryAndConflicts(runCtx, &list, srcClient, dstClient, srcEnv, dstEnv, *concurrency, parseResourcesFlag(*resources))
 	}
 
-	list.WriteTerminal(stdout, "Appwrite Migration Guard — preflight")
-	return list.ExitCode()
+	return finishChecklist(&list, "preflight", "Appwrite Migration Guard — preflight", *jsonOut, stdout, stderr)
 }
 
 func checkReachable(ctx context.Context, list *Checklist, label string, client *appwrite.Client) (version string, ok bool) {

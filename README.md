@@ -115,7 +115,9 @@ cp .env.example .env
 `doctor` checks, in order: that required environment variables are set,
 that the endpoint is reachable (`GET /health/version`, unauthenticated),
 and that the configured API key is valid and has the `health.read` scope
-(`GET /health`). It never mutates anything.
+(`GET /health`). It never mutates anything. Add `--json` to save the
+checklist for `amg report` (text/json/html) instead of only printing a
+terminal summary.
 
 ```bash
 ./amg inventory
@@ -180,22 +182,23 @@ something in the source — a real collision risk. It answers "can I
 technically connect and proceed without an obvious collision" — not
 "is this migration safe" in any broader sense (no size/load estimate, no
 migration-specific risk assessment); see
-[docs/assurance-boundary.md](docs/assurance-boundary.md).
+[docs/assurance-boundary.md](docs/assurance-boundary.md). Add `--json`
+to save the checklist for `amg report`, the same as `doctor`.
 
 ```bash
 ./amg verify --json > result.json
 ./amg report --format html --out report.html result.json
 ```
 
-`report` re-renders a `compare`/`verify` result you already saved as
-`--json` — as `text` (default), `json` (pretty-printed), or a
-self-contained `html` file with no external stylesheet, script, or
-network request of any kind, safe to open straight from disk or attach
-to a PR/ticket. Every value is HTML-escaped (a resource literally named
-`<script>...</script>` renders as inert text, not executes), and
-PASS/WARN/BLOCK is always shown as text, never color alone. `report`
-makes no network calls and needs no Appwrite credentials — it only reads
-the JSON file you give it.
+`report` re-renders a saved `--json` result — from `compare`/`verify`
+*or* `doctor`/`preflight` (it detects which automatically) — as `text`
+(default), `json` (pretty-printed), or a self-contained `html` file with
+no external stylesheet, script, or network request of any kind, safe to
+open straight from disk or attach to a PR/ticket. Every value is
+HTML-escaped (a resource literally named `<script>...</script>` renders
+as inert text, not executes), and PASS/WARN/BLOCK is always shown as
+text, never color alone. `report` makes no network calls and needs no
+Appwrite credentials — it only reads the JSON file you give it.
 
 ## Configuration
 
@@ -479,8 +482,6 @@ every push (`.github/workflows/ci.yml`).
   paths may have more expected transformations amg doesn't know about yet.
 - Not tested against every self-hosted Appwrite version — verified so far
   against Appwrite Cloud running server version 2.3.0.
-- `amg report`'s HTML output covers `compare`/`verify` results only — it
-  does not (yet) render `doctor`/`preflight`'s checklist output.
 - Windows/macOS/Linux binaries are not yet published; build from source.
 - See [docs/known-false-negatives.md](docs/known-false-negatives.md) for
   a concrete, table-form list of specific differences amg's current

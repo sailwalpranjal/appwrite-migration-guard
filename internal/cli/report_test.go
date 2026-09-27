@@ -55,3 +55,40 @@ func TestChecklist_WriteTerminal_NoColorOnlyLabels(t *testing.T) {
 		}
 	}
 }
+
+// TestChecklistResult_WriteTerminal_IgnoresMismatchedStoredOverall is a
+// regression guard: ChecklistResult.WriteTerminal must print "Result:"
+// derived from Checks, never the (possibly stale or hand-edited)
+// deserialized Overall field — see overallOfChecks's doc comment.
+func TestChecklistResult_WriteTerminal_IgnoresMismatchedStoredOverall(t *testing.T) {
+	res := ChecklistResult{
+		Overall: StatusPass, // deliberately wrong
+		Checks:  []Check{{Status: StatusBlock, Title: "Endpoint reachable", Detail: "connection refused"}},
+	}
+	var buf bytes.Buffer
+	res.WriteTerminal(&buf, "Appwrite Migration Guard")
+	out := buf.String()
+	if !strings.Contains(out, "Result: BLOCK") {
+		t.Fatalf("expected the derived BLOCK result, not the stored PASS field, got:\n%s", out)
+	}
+}
+
+func TestOverallOfChecks(t *testing.T) {
+	cases := []struct {
+		name   string
+		checks []Check
+		want   Status
+	}{
+		{"empty is block", nil, StatusBlock},
+		{"all pass", []Check{{Status: StatusPass}, {Status: StatusPass}}, StatusPass},
+		{"warn wins over pass", []Check{{Status: StatusPass}, {Status: StatusWarn}}, StatusWarn},
+		{"block wins over warn and pass", []Check{{Status: StatusPass}, {Status: StatusWarn}, {Status: StatusBlock}}, StatusBlock},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := overallOfChecks(tc.checks); got != tc.want {
+				t.Fatalf("got %s, want %s", got, tc.want)
+			}
+		})
+	}
+}

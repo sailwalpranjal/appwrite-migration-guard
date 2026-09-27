@@ -2,6 +2,7 @@ package cli
 
 import (
 	"context"
+	"encoding/json"
 	"flag"
 	"fmt"
 	"io"
@@ -22,6 +23,7 @@ func RunDoctor(ctx context.Context, args []string, stdout, stderr io.Writer) int
 	fs := flag.NewFlagSet("doctor", flag.ContinueOnError)
 	fs.SetOutput(stderr)
 	timeout := fs.Duration("timeout", doctorTimeout, "maximum time to allow the reachability/auth check — raise this for a high-latency self-hosted endpoint")
+	jsonOut := fs.Bool("json", false, "print the checklist as JSON instead of a terminal summary — feed the saved file to `amg report` for text/json/html rendering")
 	if err := fs.Parse(args); err != nil {
 		return exitForParseError(err)
 	}
@@ -33,8 +35,7 @@ func RunDoctor(ctx context.Context, args []string, stdout, stderr io.Writer) int
 
 	if err := env.Validate(); err != nil {
 		list.Warn("Configuration", err.Error())
-		list.WriteTerminal(stdout, "Appwrite Migration Guard — doctor")
-		return list.ExitCode()
+		return finishChecklist(&list, "doctor", "Appwrite Migration Guard — doctor", *jsonOut, stdout, stderr)
 	}
 	list.Pass("Configuration (APPWRITE_ENDPOINT/PROJECT_ID/API_KEY present)")
 
@@ -45,19 +46,34 @@ func RunDoctor(ctx context.Context, args []string, stdout, stderr io.Writer) int
 	v, err := client.Version(runCtx)
 	if err != nil {
 		list.Block("Endpoint reachable", explain(err))
-		list.WriteTerminal(stdout, "Appwrite Migration Guard — doctor")
-		return list.ExitCode()
+		return finishChecklist(&list, "doctor", "Appwrite Migration Guard — doctor", *jsonOut, stdout, stderr)
 	}
 	list.Pass(fmt.Sprintf("Endpoint reachable (Appwrite %s)", v.Version))
 
 	if _, err := client.Health(runCtx); err != nil {
 		list.Block("Authentication", explainAuthError(err))
-		list.WriteTerminal(stdout, "Appwrite Migration Guard — doctor")
-		return list.ExitCode()
+		return finishChecklist(&list, "doctor", "Appwrite Migration Guard — doctor", *jsonOut, stdout, stderr)
 	}
 	list.Pass("Authentication (API key accepted, health.read scope confirmed)")
 
-	list.WriteTerminal(stdout, "Appwrite Migration Guard — doctor")
+	return finishChecklist(&list, "doctor", "Appwrite Migration Guard — doctor", *jsonOut, stdout, stderr)
+}
+
+// finishChecklist renders list as JSON or terminal text (every early
+// return in doctor/preflight goes through this single exit point, so
+// --json behaves identically regardless of which check ended the run)
+// and returns the resulting exit code.
+func finishChecklist(list *Checklist, command, title string, jsonOut bool, stdout, stderr io.Writer) int {
+	if jsonOut {
+		enc := json.NewEncoder(stdout)
+		enc.SetIndent("", "  ")
+		if err := enc.Encode(list.ToResult(command)); err != nil {
+			fmt.Fprintln(stderr, "amg "+command+": encode JSON:", err.Error())
+			return ExitBlock
+		}
+		return list.ExitCode()
+	}
+	list.WriteTerminal(stdout, title)
 	return list.ExitCode()
 }
 

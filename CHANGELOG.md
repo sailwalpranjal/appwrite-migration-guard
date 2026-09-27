@@ -7,6 +7,35 @@ follows [Keep a Changelog](https://keepachangelog.com/).
 
 ### Added
 
+- `--json` on `doctor` and `preflight`, and `amg report` now
+  auto-detects and renders either a `compare`/`verify` result or a
+  `doctor`/`preflight` checklist (text/json/html) — closing a
+  previously-documented README limitation ("report's HTML output covers
+  compare/verify only"), whose actual root cause was that `doctor`/
+  `preflight` had no `--json` output at all for `report` to read.
+  `ChecklistResult` is versioned the same way `compare.Result` is
+  (`ChecklistSchemaVersion`, rejecting a from-the-future file).
+  Self code-reviewed before landing; caught and fixed a real
+  correctness gap: the initial version switched on a saved
+  `ChecklistResult`'s deserialized `"overall"` field verbatim to choose
+  the exit code, instead of deriving it from `"checks"` the way
+  `compare.Result.Overall()` is always a derived method rather than
+  stored data. A hand-edited, corrupted-in-transit, or future/buggy
+  amg's JSON carrying a BLOCK check alongside `"overall":"PASS"` would
+  have made `amg report` exit 0 while printing the BLOCK line —
+  silently green-lighting a CI pipeline gated on the exit code. Fixed
+  with a single shared `overallOfChecks` derivation used everywhere
+  (`ExitCode()`, `WriteTerminal`, the JSON-format exit code, and the
+  HTML badge), with a regression test proving all three output formats
+  reject the mismatched-field case. Also fixed two lower-severity
+  findings from the same review: `Checklist.WriteTerminal` and
+  `ChecklistResult.WriteTerminal` were near-duplicate implementations
+  (merged into one shared `writeChecklistTerminal`), and the `report`
+  command's one-line `--help` summary still said "compare/verify"
+  only.
+  Verified live against a real Appwrite Cloud project: `amg doctor
+  --json` and `amg preflight --json`, each piped through `amg report
+  --format html`, produced correct, screenshotted HTML reports.
 - `--resources tables,storage,users,functions,sites` on `inventory`,
   `snapshot`, `verify`, and `preflight`, restricting collection to
   specific categories — a category outside the filter is never

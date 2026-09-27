@@ -43,7 +43,7 @@ var Commands = []Command{
 	{Name: "compare", Summary: "Compare two local manifests without any network access", Run: RunCompare},
 	{Name: "verify", Summary: "Compare source, expected, and destination state after a migration", Run: RunVerify},
 	{Name: "preflight", Summary: "Check source/destination compatibility before a migration", Run: RunPreflight},
-	{Name: "report", Summary: "Render a saved compare/verify result as text, JSON, or HTML", Run: RunReport},
+	{Name: "report", Summary: "Render a saved compare/verify/doctor/preflight result as text, JSON, or HTML", Run: RunReport},
 	{Name: "version", Summary: "Print amg's version", Run: RunVersion},
 }
 
