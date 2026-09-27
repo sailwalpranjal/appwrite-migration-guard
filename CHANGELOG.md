@@ -7,6 +7,31 @@ follows [Keep a Changelog](https://keepachangelog.com/).
 
 ### Added
 
+- Users inventory and comparison. `appwrite.User` deliberately has no
+  field for `password`/`hash`/`hashOptions`/`email`/`phone`/`prefs` —
+  even though Appwrite's raw response can include all of them — so
+  `json.Unmarshal` silently drops them; there is nothing for that data
+  to decode into. Only administrative/verification state is collected
+  (enabled/disabled, email/phone verification, MFA, labels) and
+  compared (`config_changed`).
+  Self code-reviewed before landing; fixed a real bug it found:
+  list-valued metadata (a user's `labels`, a bucket's
+  `allowed_file_extensions`) was compared with a literal string
+  comparison, which is order-sensitive — Appwrite doesn't guarantee list
+  ordering, so semantically identical lists returned in a different
+  order would have produced a spurious BLOCK. Fixed with an
+  order-independent comparison (`equalMetadataValue`) that also handles
+  the `[]any` shape a list takes after a manifest round-trips through
+  JSON. The review also caught that this stage's docs didn't actually
+  explain the PII-omission rationale despite code comments pointing to
+  them — fixed in docs/migration-semantics.md.
+  Verified live against Appwrite Cloud: created a real user (confirmed
+  by inspecting the raw API response directly that it included a live
+  argon2 password hash and an email address), ran `amg inventory --json`
+  and grepped the output and the saved manifest file for the
+  hash/email/phone — zero matches in either. Disabled the user and added
+  a label, snapshotted again, and `amg compare` correctly reported both
+  changes with no PII anywhere in either manifest.
 - `amg report <result.json>`: renders a saved `compare`/`verify --json`
   result as text (default), pretty-printed JSON, or a self-contained
   HTML file — no external stylesheet, script, or network request, safe

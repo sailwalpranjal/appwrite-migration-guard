@@ -30,6 +30,8 @@ func fakeInventoryServer(t *testing.T) *httptest.Server {
 			json.NewEncoder(w).Encode(map[string]any{"total": 3, "rows": []any{}})
 		case "/storage/buckets":
 			json.NewEncoder(w).Encode(map[string]any{"total": 0, "buckets": []any{}})
+		case "/users":
+			json.NewEncoder(w).Encode(map[string]any{"total": 0, "users": []any{}})
 		default:
 			w.WriteHeader(http.StatusNotFound)
 		}

@@ -95,6 +95,16 @@ func TestCompare_BucketAllowedExtensionsChanged_Blocks(t *testing.T) {
 	}
 }
 
+func TestCompare_BucketAllowedExtensionsReordered_Pass(t *testing.T) {
+	src := inv(bucket("b1", "Avatars", map[string]any{"allowed_file_extensions": []string{"png", "jpg"}}))
+	dst := inv(bucket("b1", "Avatars", map[string]any{"allowed_file_extensions": []string{"jpg", "png"}}))
+
+	res := Compare("source", src, "dest", dst)
+	if res.Overall() != SeverityPass {
+		t.Fatalf("expected PASS for reordered extensions, got %s (%+v)", res.Overall(), res.Findings)
+	}
+}
+
 // Regression guard: a table's bucket-only metadata keys (e.g.
 // file_security) must never be compared against a table's own keys, and
 // vice versa — comparedMetadataKeys is keyed by ResourceType precisely to

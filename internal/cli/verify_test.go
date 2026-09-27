@@ -52,6 +52,8 @@ func tablesDBServer(t *testing.T, databases, tables, rowTotal int) *httptest.Ser
 			json.NewEncoder(w).Encode(map[string]any{"total": rowTotal, "rows": []any{}})
 		case r.URL.Path == "/storage/buckets":
 			json.NewEncoder(w).Encode(map[string]any{"total": 0, "buckets": []any{}})
+		case r.URL.Path == "/users":
+			json.NewEncoder(w).Encode(map[string]any{"total": 0, "users": []any{}})
 		default:
 			w.WriteHeader(http.StatusNotFound)
 		}

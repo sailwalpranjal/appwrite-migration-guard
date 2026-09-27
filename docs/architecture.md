@@ -65,6 +65,12 @@ A narrow REST client, not a general SDK:
   `ListFiles`. `File.Signature` is Appwrite's own server-computed MD5 of
   file content, letting amg verify file integrity by comparing a string
   instead of ever downloading file bytes — see docs/migration-semantics.md.
+- `users.go` — `ListUsers`. The `User` struct declares only
+  administrative/verification fields (`Name`, `Status`, `Labels`,
+  verification/MFA flags); it has no field for `password`/`hash`/
+  `hashOptions`/`email`/`phone`/`prefs`, so `json.Unmarshal` silently
+  drops them even if Appwrite's raw response includes them — there is
+  nothing for that data to decode into. See docs/migration-semantics.md.
 
 Every endpoint path and header this package uses is annotated with the
 exact file in `github.com/appwrite/appwrite` (tag `2.3.0`) it was verified
@@ -154,7 +160,7 @@ release build time; defaults to `"dev"` for local builds.
 ## What is deliberately not here yet
 
 No inventory (and therefore no comparison) of legacy Databases
-(collections/documents)/Users/Functions/Sites, no exhaustive (non-sampled)
+(collections/documents)/Functions/Sites, no exhaustive (non-sampled)
 row content comparison, no fault-injection migration lab, no persistent
 run history beyond the manifest/result files a user explicitly saves.
 These are staged work — see the README roadmap.
