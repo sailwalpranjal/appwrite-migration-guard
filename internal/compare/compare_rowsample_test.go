@@ -73,6 +73,29 @@ func TestCompare_RowSampleUnexpected_Warns(t *testing.T) {
 	}
 }
 
+// TestCompareWithPolicy_Strict_BlocksRowSampleUnexpected is a regression
+// guard from self-review: StrictPolicy's whole purpose is to catch
+// unexpected destination content, and a sampled row present on the
+// destination but absent from the source is exactly that at the row
+// level — it must be raised together with RuleUnexpectedResource, not
+// left behind at a fixed WARN.
+func TestCompareWithPolicy_Strict_BlocksRowSampleUnexpected(t *testing.T) {
+	src := inv(tableWithSamples("t1", nil))
+	dst := inv(tableWithSamples("t1", []inventory.RowSample{{ID: "r1", Digest: "aaa"}}))
+
+	res := CompareWithPolicy("source", src, "dest", dst, StrictPolicy())
+	if res.Overall() != SeverityBlock {
+		t.Fatalf("expected BLOCK under the strict policy, got %s (%+v)", res.Overall(), res.Findings)
+	}
+	f := findRule(res.Findings, RuleRowSampleUnexpected)
+	if f == nil {
+		t.Fatal("expected a row_sample_unexpected finding")
+	}
+	if f.Severity != SeverityBlock {
+		t.Fatalf("expected row_sample_unexpected severity BLOCK under the strict policy, got %s", f.Severity)
+	}
+}
+
 func TestCompare_RowSampleUnverified_Warns(t *testing.T) {
 	s := tableWithSamples("t1", nil)
 	s.SampleError = "forbidden"

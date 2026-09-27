@@ -28,6 +28,7 @@ func RunVerify(ctx context.Context, args []string, stdout, stderr io.Writer) int
 	noCounts := fs.Bool("no-row-counts", false, "skip per-table row counts (metadata only)")
 	sampleRows := fs.Int("sample-rows", 0, "fetch up to N rows per table on both sides and compare content digests; 0 disables sampling (default)")
 	concurrency := fs.Int("concurrency", inventory.DefaultConcurrency, "maximum concurrent Appwrite requests per side")
+	strict := fs.Bool("strict", false, "use the strict policy: an unexpected destination resource is BLOCK instead of WARN (see docs/comparison-model.md#policy)")
 	if err := fs.Parse(args); err != nil {
 		return ExitBlock
 	}
@@ -74,7 +75,11 @@ func RunVerify(ctx context.Context, args []string, stdout, stderr io.Writer) int
 		return ExitBlock
 	}
 
-	res := compare.Compare("source", srcInv, "destination", dstInv)
+	policy := compare.DefaultPolicy()
+	if *strict {
+		policy = compare.StrictPolicy()
+	}
+	res := compare.CompareWithPolicy("source", srcInv, "destination", dstInv, policy)
 
 	if *jsonOut {
 		enc := json.NewEncoder(stdout)

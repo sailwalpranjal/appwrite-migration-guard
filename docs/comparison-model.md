@@ -13,6 +13,40 @@ unlike `cli.Checklist` (used for operational checks like `doctor`),
 `Compare` only ever returns once it has fully finished, so there is no
 "incomplete run" case to guard against here.
 
+## Policy
+
+Comparison *facts* (a resource is missing, a permission differs) and the
+*policy* decision about how severely to treat a fact are deliberately
+separated (`compare.Policy`) — an external audit correctly flagged that
+earlier versions hard-coded a specific policy choice directly into the
+comparison engine, with no way for a caller operating under different
+constraints to disagree.
+
+This is intentionally narrow: only `unexpected_resource` and its
+row-level analogue `row_sample_unexpected` currently vary by policy,
+because "the destination has something the source didn't" is the one
+question in the table above with a genuinely debatable default — that
+content may be intentional pre-existing content (a generic diff context)
+or leaked/contaminated data (a pre-cutover production gate) — and it's
+the same question at two resource granularities, so both move together
+under one policy field rather than needing to be set independently.
+Every other rule (`missing_resource`, `permission_changed`,
+`schema_changed`, etc.) stays fixed at its listed severity: there is no
+context this project can currently justify where a resource silently
+vanishing, or its permissions silently changing, should be anything
+other than BLOCK, so those didn't grow a policy knob with no demonstrated
+use case behind it.
+
+| Policy | `unexpected_resource` / `row_sample_unexpected` severity |
+|---|---|
+| `default` (`compare.DefaultPolicy()`) | WARN |
+| `strict` (`compare.StrictPolicy()`, `--strict` on `compare`/`verify`) | BLOCK |
+
+`Result.PolicyName` records which policy produced a given result, so a
+saved `--json` result (and `amg report`) is self-describing about which
+policy classified its findings, rather than requiring the reader to
+already know how the run was invoked.
+
 ## Matching
 
 Resources are matched between source and destination by `(Type, ID)`
@@ -41,7 +75,7 @@ two unrelated "missing" + "unexpected" resources.
 | `row_content_changed` | BLOCK | A sampled row's content digest differs between source and destination — see [Row content sampling](#row-content-sampling-optin) below. |
 | `row_permission_changed` | BLOCK | A sampled row's own `$permissions` differ (rows have permissions independent of their table's). |
 | `row_sample_missing` | WARN | A sampled source row's ID wasn't found in the destination's sample — could mean the row is genuinely gone, or just fell outside the sampled window. Not a confirmed loss. |
-| `row_sample_unexpected` | WARN | The reverse: a destination row's ID wasn't in the source sample. |
+| `row_sample_unexpected` | WARN (BLOCK under `strict`) | The reverse: a destination row's ID wasn't in the source sample — policy-controlled, see [Policy](#policy). |
 | `row_sample_unverified` | WARN | Row sampling itself failed on at least one side (`Resource.SampleError`) — partial verification, not a hard failure. |
 
 `config_changed` compares different metadata keys depending on resource

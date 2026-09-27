@@ -81,10 +81,18 @@ const ResultSchemaVersion = 1
 
 // Result is the full, deterministic output of one Compare call.
 type Result struct {
-	SchemaVersion int       `json:"schema_version"`
-	SourceLabel   string    `json:"source_label"`
-	DestLabel     string    `json:"dest_label"`
-	Findings      []Finding `json:"findings"`
+	SchemaVersion int    `json:"schema_version"`
+	SourceLabel   string `json:"source_label"`
+	DestLabel     string `json:"dest_label"`
+	// PolicyName records which Policy classified these findings' severities
+	// (see Policy below), so a saved result is self-describing: re-reading
+	// it later (or in `amg report`) never requires guessing which policy
+	// produced a given BLOCK/WARN split. An external audit specifically
+	// raised this as a gap — a saved result had no record of the policy
+	// that produced it, making two differently-configured runs
+	// indistinguishable after the fact.
+	PolicyName string    `json:"policy_name"`
+	Findings   []Finding `json:"findings"`
 }
 
 // Overall returns the worst Severity across all findings, or
@@ -103,6 +111,55 @@ func (r *Result) Overall() Severity {
 	return worst
 }
 
+// Policy separates raw comparison facts from the severity decision made
+// about them — an external audit correctly identified that the engine
+// previously hard-coded policy choices (e.g. "an unexpected destination
+// resource is always just a WARN") directly into comparison logic, with
+// no way for a caller to say otherwise. A generic diff tool and a
+// pre-cutover production migration gate can reasonably disagree on that
+// specific question — a resource that exists on the destination but not
+// the source may be intentional pre-existing content in one context, or
+// leaked/contaminated data in another — so the choice belongs to the
+// caller, not to compareMatched.
+//
+// This is deliberately narrow: only the two rules with a genuinely
+// debatable default — RuleUnexpectedResource, and its row-level
+// analogue RuleRowSampleUnexpected (a sampled destination row with no
+// matching source row — the same "unexpected content" question, one
+// level down) — are made policy-controlled. Both share one severity
+// field rather than two, since they are the same policy question at two
+// resource granularities and a caller choosing "strict" almost
+// certainly wants both raised together, not one BLOCK and one still
+// WARN. Rules like missing_resource or permission_changed have no
+// comparable ambiguity — a resource silently vanishing, or its
+// permissions silently changing, is a real problem under any policy this
+// project can currently justify, so those stay fixed at BLOCK rather
+// than growing a knob with no demonstrated use case behind it.
+type Policy struct {
+	// Name identifies this policy in a saved Result.PolicyName, so a
+	// result is self-describing about which policy produced it.
+	Name string
+	// UnexpectedSeverity is the severity assigned to RuleUnexpectedResource
+	// and RuleRowSampleUnexpected findings — "the destination has
+	// something the source didn't" at the resource and row level.
+	UnexpectedSeverity Severity
+}
+
+// DefaultPolicy matches amg's original, still-default behavior: an
+// unexpected destination resource (or sampled row) is a WARN, since it
+// may be intentional pre-existing content rather than a migration defect.
+func DefaultPolicy() Policy {
+	return Policy{Name: "default", UnexpectedSeverity: SeverityWarn}
+}
+
+// StrictPolicy treats any destination resource not present in the source
+// as a BLOCK — appropriate for a pre-cutover production migration gate,
+// where "the destination has something I didn't expect" is itself a
+// finding worth stopping for, not a WARN to skim past.
+func StrictPolicy() Policy {
+	return Policy{Name: "strict", UnexpectedSeverity: SeverityBlock}
+}
+
 func resourceKey(t inventory.ResourceType, id string) string {
 	return string(t) + ":" + id
 }
@@ -115,12 +172,21 @@ func indexByKey(inv *inventory.Inventory) map[string]inventory.Resource {
 	return idx
 }
 
-// Compare produces a deterministic diff between source and dest. Resource
-// matching is by (Type, ID) only — not position, and not ParentID (a
-// resource that moved to a different parent is itself reported via
-// RuleParentChanged rather than treated as two unrelated resources).
+// Compare produces a deterministic diff between source and dest under
+// DefaultPolicy. Resource matching is by (Type, ID) only — not position,
+// and not ParentID (a resource that moved to a different parent is
+// itself reported via RuleParentChanged rather than treated as two
+// unrelated resources). See CompareWithPolicy to control
+// policy-dependent severities (currently just RuleUnexpectedResource).
 func Compare(sourceLabel string, source *inventory.Inventory, destLabel string, dest *inventory.Inventory) *Result {
-	res := &Result{SchemaVersion: ResultSchemaVersion, SourceLabel: sourceLabel, DestLabel: destLabel}
+	return CompareWithPolicy(sourceLabel, source, destLabel, dest, DefaultPolicy())
+}
+
+// CompareWithPolicy is Compare with an explicit Policy controlling
+// policy-dependent finding severities. See Policy's doc comment for why
+// this is deliberately narrow rather than a general severity-override map.
+func CompareWithPolicy(sourceLabel string, source *inventory.Inventory, destLabel string, dest *inventory.Inventory, policy Policy) *Result {
+	res := &Result{SchemaVersion: ResultSchemaVersion, SourceLabel: sourceLabel, DestLabel: destLabel, PolicyName: policy.Name}
 
 	srcIdx := indexByKey(source)
 	dstIdx := indexByKey(dest)
@@ -135,13 +201,13 @@ func Compare(sourceLabel string, source *inventory.Inventory, destLabel string, 
 			})
 			continue
 		}
-		res.Findings = append(res.Findings, compareMatched(s, d)...)
+		res.Findings = append(res.Findings, compareMatched(s, d, policy)...)
 	}
 
 	for k, d := range dstIdx {
 		if _, ok := srcIdx[k]; !ok {
 			res.Findings = append(res.Findings, Finding{
-				Severity: SeverityWarn, Rule: RuleUnexpectedResource,
+				Severity: policy.UnexpectedSeverity, Rule: RuleUnexpectedResource,
 				ResourceType: d.Type, ResourceID: d.ID, ParentID: d.ParentID,
 				Message: fmt.Sprintf("%s %q exists in %s but was not present in %s", d.Type, d.ID, destLabel, sourceLabel),
 			})
@@ -162,7 +228,7 @@ func Compare(sourceLabel string, source *inventory.Inventory, destLabel string, 
 // structurally guaranteed to differ here regardless of migration
 // correctness, so treating this as a difference would only ever produce
 // noise. See docs/migration-semantics.md.
-func compareMatched(s, d inventory.Resource) []Finding {
+func compareMatched(s, d inventory.Resource, policy Policy) []Finding {
 	var findings []Finding
 	add := func(sev Severity, rule, msg string) {
 		findings = append(findings, Finding{
@@ -197,7 +263,7 @@ func compareMatched(s, d inventory.Resource) []Finding {
 			add(SeverityWarn, RuleSchemaUnverified, fmt.Sprintf("table %q schema digest missing on at least one side; schema could not be verified", s.ID))
 		}
 		findings = append(findings, compareRowCounts(s, d)...)
-		findings = append(findings, compareRowSamples(s, d)...)
+		findings = append(findings, compareRowSamples(s, d, policy)...)
 	case inventory.ResourceFile:
 		switch {
 		case s.ContentDigest == "" || d.ContentDigest == "":
@@ -255,11 +321,15 @@ func compareRowCounts(s, d inventory.Resource) []Finding {
 // compareRowSamples compares the bounded row-content samples attached to
 // two matched table resources (see inventory.Resource.RowSamples). This
 // is a best-effort check: a row outside the sampled window is invisible
-// to it, so a missing/unexpected sampled row ID is WARN, not BLOCK — it
-// means "this specific check couldn't confirm the row," not "the row is
-// definitely gone." A confirmed digest or permission difference *within*
-// the sample is a real, BLOCK-level finding.
-func compareRowSamples(s, d inventory.Resource) []Finding {
+// to it, so a missing sampled row ID is WARN, not BLOCK — it means "this
+// specific check couldn't confirm the row," not "the row is definitely
+// gone." A confirmed digest or permission difference *within* the sample
+// is a real, BLOCK-level finding. An *unexpected* sampled row (present on
+// the destination, absent from the source sample) is policy-controlled
+// via policy.UnexpectedSeverity — the same "destination has something
+// the source didn't" question RuleUnexpectedResource asks, one level
+// down, so StrictPolicy raises both together.
+func compareRowSamples(s, d inventory.Resource, policy Policy) []Finding {
 	table := Finding{ResourceType: s.Type, ResourceID: s.ID, ParentID: s.ParentID}
 
 	if s.SampleError != "" || d.SampleError != "" {
@@ -319,7 +389,7 @@ func compareRowSamples(s, d inventory.Resource) []Finding {
 	for _, id := range dstIDs {
 		if _, ok := srcByID[id]; !ok {
 			f := table
-			f.Severity = SeverityWarn
+			f.Severity = policy.UnexpectedSeverity
 			f.Rule = RuleRowSampleUnexpected
 			f.Message = fmt.Sprintf("table %q: row %q found on the destination side but was not in the source sample", s.ID, id)
 			findings = append(findings, f)
