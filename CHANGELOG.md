@@ -5,6 +5,24 @@ follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+### Security
+
+- Ran a manual audit of every `internal/appwrite` struct's JSON tags
+  confirming no field named password/hash/email/phone/prefs/vars/
+  secret/token exists anywhere in the client — matches the documented
+  design boundary. Confirmed `CountRows` discards the one row it fetches
+  for counting (only `.Total` is ever returned). Confirmed no `%+v`/
+  `%#v` struct-dump formatting exists anywhere that could accidentally
+  print an `APIKey` field.
+- Ran `govulncheck` against the module (zero direct dependencies, so
+  this mainly checks the standard library) — no vulnerabilities found.
+  Added it as a permanent `security` job in CI, run on every push.
+- Rewrote SECURITY.md, which had gone stale since the foundation stage:
+  it described a project with no Users/Functions/report rendering.
+  Now documents the actual current secret/PII exclusion boundaries per
+  resource type, the HTML report's XSS-safe escaping, and the
+  dependency/supply-chain posture.
+
 ### Added
 
 - Release automation: `.goreleaser.yaml` + `.github/workflows/release.yml`
