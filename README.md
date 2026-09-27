@@ -205,6 +205,49 @@ amg reads configuration from environment variables (and an optional local
 API keys are never logged, never written to manifests or reports, and are
 only ever sent as the `X-Appwrite-Key` HTTP header.
 
+### Getting a project and API key to test against
+
+**Appwrite Cloud** (fastest way to try amg against something real):
+
+1. Create a free account at [cloud.appwrite.io](https://cloud.appwrite.io).
+2. Create a project — this gives you a **Project ID**, and your
+   **Endpoint** is `https://cloud.appwrite.io/v1` (or your selected
+   region's endpoint, shown in the project's Overview page).
+3. In the project, go to **Overview → Integrate with your server →
+   API keys** (or **Settings → API keys**) and create a new API key.
+   For amg's own commands, the scopes actually used are narrow — grant
+   only what the command you're running needs:
+   - `health.read` — `amg doctor`'s connectivity/auth check.
+   - `databases.read`, `tables.read` (or `collections.read` if your
+     project still has legacy Databases), `rows.read` (or
+     `documents.read`) — TablesDB inventory.
+   - `buckets.read`, `files.read` — Storage inventory.
+   - `users.read` — Users inventory.
+   - `functions.read` — Functions inventory.
+   - `sites.read` — Sites inventory.
+   amg never requests a write scope for any resource type it inventories
+   — it only ever reads (see [What amg is](#what-amg-is)).
+4. `cp .env.example .env`, fill in `APPWRITE_ENDPOINT`/
+   `APPWRITE_PROJECT_ID`/`APPWRITE_API_KEY` (or the `AMG_SOURCE_*`/
+   `AMG_DEST_*` pair if you have two projects to compare), then
+   `./amg doctor` to confirm it connects.
+
+**Self-hosted Appwrite**, if you'd rather run the source you're
+comparing locally: follow Appwrite's own
+[self-hosting installation guide](https://appwrite.io/docs/advanced/self-hosting/installation),
+which uses their official Docker installer image to generate a Docker
+Compose setup and walks you through a browser-based setup wizard at
+`http://localhost:<port>`. This project deliberately doesn't restate
+that command here — Appwrite's own installer has changed shape across
+versions (a per-version `appwrite/appwrite` image vs. a dedicated
+`appwrite/install` image, different default ports across guides), and
+duplicating a specific command in this README risks it silently going
+stale against Appwrite's own docs. Minimum requirements per Appwrite's
+docs at time of writing: 2 CPU cores, 4GB RAM, 2GB swap, Docker Compose
+v2. Once it's running, point `APPWRITE_ENDPOINT` (or `AMG_SOURCE_*`/
+`AMG_DEST_*`) at your instance's `/v1` endpoint and create an API key
+the same way as step 3 above, from that instance's own console.
+
 ## Example workflow
 
 ```text

@@ -87,10 +87,9 @@ type Result struct {
 	// PolicyName records which Policy classified these findings' severities
 	// (see Policy below), so a saved result is self-describing: re-reading
 	// it later (or in `amg report`) never requires guessing which policy
-	// produced a given BLOCK/WARN split. An external audit specifically
-	// raised this as a gap — a saved result had no record of the policy
-	// that produced it, making two differently-configured runs
-	// indistinguishable after the fact.
+	// produced a given BLOCK/WARN split — without it, a saved result had
+	// no record of the policy that produced it, making two
+	// differently-configured runs indistinguishable after the fact.
 	PolicyName string    `json:"policy_name"`
 	Findings   []Finding `json:"findings"`
 }
@@ -112,15 +111,14 @@ func (r *Result) Overall() Severity {
 }
 
 // Policy separates raw comparison facts from the severity decision made
-// about them — an external audit correctly identified that the engine
-// previously hard-coded policy choices (e.g. "an unexpected destination
-// resource is always just a WARN") directly into comparison logic, with
-// no way for a caller to say otherwise. A generic diff tool and a
-// pre-cutover production migration gate can reasonably disagree on that
-// specific question — a resource that exists on the destination but not
-// the source may be intentional pre-existing content in one context, or
-// leaked/contaminated data in another — so the choice belongs to the
-// caller, not to compareMatched.
+// about them. The engine used to hard-code policy choices (e.g. "an
+// unexpected destination resource is always just a WARN") directly into
+// comparison logic, with no way for a caller to say otherwise. A
+// generic diff tool and a pre-cutover production migration gate can
+// reasonably disagree on that specific question — a resource that
+// exists on the destination but not the source may be intentional
+// pre-existing content in one context, or leaked/contaminated data in
+// another — so the choice belongs to the caller, not to compareMatched.
 //
 // This is deliberately narrow: only the two rules with a genuinely
 // debatable default — RuleUnexpectedResource, and its row-level

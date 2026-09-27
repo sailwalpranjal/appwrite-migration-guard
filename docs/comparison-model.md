@@ -17,10 +17,9 @@ unlike `cli.Checklist` (used for operational checks like `doctor`),
 
 Comparison *facts* (a resource is missing, a permission differs) and the
 *policy* decision about how severely to treat a fact are deliberately
-separated (`compare.Policy`) — an external audit correctly flagged that
-earlier versions hard-coded a specific policy choice directly into the
-comparison engine, with no way for a caller operating under different
-constraints to disagree.
+separated (`compare.Policy`). Earlier versions hard-coded a specific
+policy choice directly into the comparison engine, with no way for a
+caller operating under different constraints to disagree.
 
 This is intentionally narrow: only `unexpected_resource` and its
 row-level analogue `row_sample_unexpected` currently vary by policy,

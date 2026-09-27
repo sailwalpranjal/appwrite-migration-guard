@@ -1,10 +1,8 @@
 # Assurance boundary
 
-This document exists because an external audit specifically asked for
-it: "what exactly does PASS prove, and what does it explicitly not
-prove?" That question deserves a direct, written answer instead of one
-assembled by a reader piecing together the README, comparison-model.md,
-and source comments.
+"What exactly does PASS prove, and what does it explicitly not prove?"
+deserves a direct, written answer instead of one assembled by a reader
+piecing together the README, comparison-model.md, and source comments.
 
 ## What a PASS proves
 
@@ -37,10 +35,9 @@ snapshots and a fixed set of checks, not about a migration process.
   `TestListDatabases_DuplicateAcrossPages` in
   `internal/appwrite/pagination_test.go` for the regression tests this
   claim rests on. That closes the specific "silent incomplete page"
-  failure mode an audit raised, but the deeper claim — "the Appwrite API
-  itself returned everything that exists" — is trusted, not
-  independently verified; amg has no way to audit Appwrite's own storage
-  layer.
+  failure mode, but the deeper claim — "the Appwrite API itself returned
+  everything that exists" — is trusted, not independently verified; amg
+  has no way to audit Appwrite's own storage layer.
 - **That amg's own collection run didn't partially fail.** `Collect`
   aborts (rather than returning a partial manifest) on a hard failure
   for resource types it must fully enumerate, and records per-resource
