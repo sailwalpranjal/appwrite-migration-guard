@@ -93,7 +93,13 @@ go install github.com/sailwalpranjal/appwrite-migration-guard/cmd/amg@latest
 
 works once `v0.1.0` is published (the Go module proxy can take a few
 minutes to index a brand new tag — use `@v0.1.0` explicitly if
-`@latest` hasn't picked it up yet).
+`@latest` hasn't picked it up yet). Verified live: `go install
+.../cmd/amg@v0.1.0` resolves and builds correctly. One real difference
+from the prebuilt release binaries: `go install` doesn't have
+GoReleaser's `-ldflags`, so `amg version` reports `dev (commit none,
+built unknown)` instead of the real released version/commit/date — a
+functional binary either way, just without embedded version metadata.
+Use a prebuilt binary below if that matters to you.
 
 Prebuilt binaries for Linux/macOS/Windows (amd64 + arm64, minus
 Windows/arm64) are attached to each
