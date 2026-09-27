@@ -123,6 +123,7 @@ const htmlTemplateSource = `<!doctype html>
     <dt>Source</dt><dd>{{.Result.SourceLabel}}</dd>
     <dt>Destination</dt><dd>{{.Result.DestLabel}}</dd>
     <dt>Generated</dt><dd>{{.GeneratedAt}}</dd>
+    <dt>Policy</dt><dd>{{.Result.PolicyName}}</dd>
   </dl>
 
   <span class="badge badge-{{.Overall}}">Result: {{.Overall}}</span>

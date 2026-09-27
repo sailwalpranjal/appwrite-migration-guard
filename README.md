@@ -150,17 +150,24 @@ on everything amg checks" — resource existence, permissions, config,
 table schema, and (if enabled) row/file content — not "is this migration
 correct end to end"; see [docs/comparison-model.md](docs/comparison-model.md#what-this-does-not-do)
 for what's deliberately outside that check, on every result including PASS.
+Both `compare` and `verify` accept `--strict`, which treats an unexpected
+destination resource as BLOCK instead of the default WARN — see
+[docs/comparison-model.md#policy](docs/comparison-model.md#policy) for
+when that default is (and isn't) the right call.
 
 ```bash
 ./amg preflight
 ```
 
-`preflight` runs *before* a migration: connectivity, authentication, and
-Appwrite version on both `AMG_SOURCE_*` and `AMG_DEST_*`, then inventories
-both sides and checks whether the destination already has a resource with
-the same ID as something in the source — a real collision risk, not a
-"looks the same" success the way `verify` treats it. Answers "can I safely
-proceed, or are there unresolved risks?"
+`preflight` checks **technical readiness** before a migration:
+connectivity, authentication, and Appwrite version on both
+`AMG_SOURCE_*` and `AMG_DEST_*`, then inventories both sides and checks
+whether the destination already has a resource with the same ID as
+something in the source — a real collision risk. It answers "can I
+technically connect and proceed without an obvious collision" — not
+"is this migration safe" in any broader sense (no size/load estimate, no
+migration-specific risk assessment); see
+[docs/assurance-boundary.md](docs/assurance-boundary.md).
 
 ```bash
 ./amg verify --json > result.json
@@ -417,6 +424,13 @@ every push (`.github/workflows/ci.yml`).
 - `amg report`'s HTML output covers `compare`/`verify` results only — it
   does not (yet) render `doctor`/`preflight`'s checklist output.
 - Windows/macOS/Linux binaries are not yet published; build from source.
+- See [docs/known-false-negatives.md](docs/known-false-negatives.md) for
+  a concrete, table-form list of specific differences amg's current
+  checks will not catch (a narrower, more specific companion to this
+  list), and [docs/assurance-boundary.md](docs/assurance-boundary.md)
+  for exactly what a PASS does and does not prove, and how every
+  "verified" claim in this repository is backed (source inspection,
+  live reproduction, automated test, or a stated assumption).
 
 ## Roadmap
 

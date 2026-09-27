@@ -95,6 +95,32 @@ func TestRunCompare_NonexistentManifest(t *testing.T) {
 	}
 }
 
+func TestRunCompare_Strict_BlocksUnexpectedResource(t *testing.T) {
+	dir := t.TempDir()
+	extra := inventory.Resource{Type: inventory.ResourceDatabase, ID: "db1", Name: "Main"}
+	a := writeTestManifest(t, dir, "source")
+	b := writeTestManifest(t, dir, "dest", extra)
+
+	var stdout, stderr bytes.Buffer
+	code := RunCompare(context.Background(), []string{a, b}, &stdout, &stderr)
+	if code != ExitWarn {
+		t.Fatalf("expected ExitWarn without --strict, got %d; stdout:\n%s", code, stdout.String())
+	}
+
+	stdout.Reset()
+	stderr.Reset()
+	code = RunCompare(context.Background(), []string{"--strict", a, b}, &stdout, &stderr)
+	if code != ExitBlock {
+		t.Fatalf("expected ExitBlock with --strict, got %d; stdout:\n%s", code, stdout.String())
+	}
+	if !bytes.Contains(stdout.Bytes(), []byte("BLOCK")) || !bytes.Contains(stdout.Bytes(), []byte("unexpected_resource")) {
+		t.Fatalf("expected a BLOCK unexpected_resource finding under --strict:\n%s", stdout.String())
+	}
+	if !bytes.Contains(stdout.Bytes(), []byte("Policy:      strict")) {
+		t.Fatalf("expected the terminal output to record the strict policy:\n%s", stdout.String())
+	}
+}
+
 func TestRunCompare_JSONOutput(t *testing.T) {
 	dir := t.TempDir()
 	a := writeTestManifest(t, dir, "source")

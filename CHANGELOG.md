@@ -7,6 +7,48 @@ follows [Keep a Changelog](https://keepachangelog.com/).
 
 ### Added
 
+- Pagination now detects any duplicated or empty resource ID across the
+  *entire* paginated result, not just a check on each page's last item.
+  Closes a specific gap from a second external audit: the previous guard
+  would miss a server bug that repeats a resource on a later page while
+  the cursor still nominally advances. Added
+  `TestListDatabases_LargeDataset_NoPageLossOrDuplication` (10,001
+  resources across ~101 pages, proving no loss/duplication/reordering)
+  and `TestListDatabases_DuplicateAcrossPages` (a page that repeats an
+  earlier resource) to `internal/appwrite/pagination_test.go`.
+- `compare.Policy`: comparison facts and the severity decision made about
+  them are now separated, closing another gap the same audit raised —
+  the engine previously hard-coded "an unexpected destination resource is
+  always WARN" directly into comparison logic. `DefaultPolicy` keeps that
+  behavior; `StrictPolicy` (`--strict` on `amg compare`/`amg verify`)
+  raises both `unexpected_resource` and its row-level analogue
+  `row_sample_unexpected` to BLOCK — appropriate for a pre-cutover
+  production gate where unexpected destination content is itself a
+  finding worth stopping for. `compare.Result.PolicyName` records which
+  policy produced a saved result. This is deliberately narrow: every
+  other rule (missing_resource, permission_changed, schema_changed, ...)
+  has no comparable ambiguity and was not given a policy knob.
+- `docs/known-false-negatives.md`: a concrete, table-form list of
+  specific differences amg's current checks will not catch, requested
+  directly by the audit ("if he refuses to document false negatives,
+  that's a serious product maturity concern").
+- `docs/assurance-boundary.md`: an explicit answer to "what exactly does
+  PASS prove, and what does it not prove," plus a framework
+  (SOURCE/LIVE/TEST/ASSUMPTION) for classifying every "verified" claim
+  in this repository by the kind of evidence actually behind it —
+  directly requested by the audit.
+
+Self code-reviewed before landing; caught and fixed two real issues:
+the per-item pagination duplicate check made the pre-existing
+"cursor did not advance" check dead code (removed, with the doc comment
+corrected to describe one unified check rather than two); and
+`StrictPolicy` only affected `unexpected_resource`, leaving its row-level
+equivalent (`row_sample_unexpected`) fixed at WARN even though it's the
+same "unexpected destination content" question `StrictPolicy`'s own doc
+comment describes as the reason to use it — fixed by having both rules
+share one `Policy.UnexpectedSeverity` field, with a new regression test
+(`TestCompareWithPolicy_Strict_BlocksRowSampleUnexpected`).
+
 - Table schema (column/index) drift detection. `appwrite.ListTables` now
   computes a `SchemaDigest` for every table — a SHA-256 hash of its
   columns and indexes, canonicalized (transient fields stripped, entries

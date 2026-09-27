@@ -1,6 +1,7 @@
 package compare
 
 import (
+	"encoding/json"
 	"testing"
 
 	"github.com/sailwalpranjal/appwrite-migration-guard/internal/inventory"
@@ -37,6 +38,38 @@ func findRule(findings []Finding, rule string) *Finding {
 	return nil
 }
 
+// TestCompare_Idempotent is a regression guard for the README's repeated
+// claim of determinism: running Compare three times over the exact same
+// two inventories must produce byte-identical JSON output every time —
+// same finding order, same content — not just an equal Overall()
+// severity. sortFindings makes this true by construction, but nothing
+// previously proved it against a non-trivial, multi-resource, multi-rule
+// fixture exercising several finding types at once.
+func TestCompare_Idempotent(t *testing.T) {
+	src := inv(
+		table("t1", "db1", "Widgets", []string{"read(\"any\")"}, map[string]any{"enabled": true, "row_security": false}, 5),
+		table("t2", "db1", "Gadgets", nil, nil, 10),
+	)
+	dst := inv(
+		table("t1", "db1", "Widgets", []string{"read(\"users\")"}, map[string]any{"enabled": false, "row_security": false}, 5),
+	)
+
+	var results [][]byte
+	for i := 0; i < 3; i++ {
+		res := Compare("source", src, "dest", dst)
+		b, err := json.Marshal(res)
+		if err != nil {
+			t.Fatalf("run %d: marshal: %v", i, err)
+		}
+		results = append(results, b)
+	}
+	for i := 1; i < len(results); i++ {
+		if string(results[i]) != string(results[0]) {
+			t.Fatalf("Compare is not idempotent: run 0 and run %d differ:\n--- run 0 ---\n%s\n--- run %d ---\n%s", i, results[0], i, results[i])
+		}
+	}
+}
+
 // Scenario A (spec section 33): destination missing a resource -> BLOCK.
 func TestCompare_MissingResource_Blocks(t *testing.T) {
 	src := inv(table("t1", "db1", "Widgets", nil, nil, 5))
@@ -62,6 +95,34 @@ func TestCompare_UnexpectedResource_Warns(t *testing.T) {
 	}
 	if findRule(res.Findings, RuleUnexpectedResource) == nil {
 		t.Fatal("expected an unexpected_resource finding")
+	}
+	if res.PolicyName != "default" {
+		t.Fatalf("expected Compare (no explicit policy) to record policy_name %q, got %q", "default", res.PolicyName)
+	}
+}
+
+// TestCompareWithPolicy_Strict_BlocksUnexpectedResource is a regression
+// guard for the policy/severity separation an external audit asked for:
+// unexpected_resource's severity is a genuine policy choice (see Policy's
+// doc comment), not a fixed comparison fact, so StrictPolicy must be able
+// to promote it to BLOCK without touching any other rule's severity.
+func TestCompareWithPolicy_Strict_BlocksUnexpectedResource(t *testing.T) {
+	src := inv()
+	dst := inv(table("t1", "db1", "Widgets", nil, nil, 5))
+
+	res := CompareWithPolicy("source", src, "dest", dst, StrictPolicy())
+	if res.Overall() != SeverityBlock {
+		t.Fatalf("expected BLOCK under the strict policy, got %s (%+v)", res.Overall(), res.Findings)
+	}
+	f := findRule(res.Findings, RuleUnexpectedResource)
+	if f == nil {
+		t.Fatal("expected an unexpected_resource finding")
+	}
+	if f.Severity != SeverityBlock {
+		t.Fatalf("expected unexpected_resource severity BLOCK under the strict policy, got %s", f.Severity)
+	}
+	if res.PolicyName != "strict" {
+		t.Fatalf("expected policy_name %q, got %q", "strict", res.PolicyName)
 	}
 }
 

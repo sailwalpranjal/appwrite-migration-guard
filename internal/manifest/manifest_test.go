@@ -1,6 +1,8 @@
 package manifest
 
 import (
+	"bytes"
+	"encoding/json"
 	"path/filepath"
 	"testing"
 
@@ -85,6 +87,50 @@ func TestRead_RejectsNewerSchemaVersion(t *testing.T) {
 	}
 	if !errs.IsKind(err, errs.KindInvalidResponse) {
 		t.Fatalf("expected KindInvalidResponse, got %v", err)
+	}
+}
+
+// TestWrite_DeterministicAsideFromRunIDAndTimestamp is a regression guard
+// for the README's repeated claim that manifests are "deterministic":
+// given identical inventory content, two independently-created manifests
+// must serialize to byte-identical JSON once the two fields that are
+// *intentionally* fresh per run (RunID, CapturedAt) are normalized out.
+// Without this test, "deterministic" was an architectural claim, not a
+// demonstrated one — an external audit specifically challenged this gap.
+func TestWrite_DeterministicAsideFromRunIDAndTimestamp(t *testing.T) {
+	buildInv := func() *inventory.Inventory {
+		inv := inventory.New("https://example.com/v1", "proj1")
+		inv.Resources = append(inv.Resources,
+			inventory.Resource{Type: inventory.ResourceTable, ID: "t2", ParentID: "db1", Name: "Two", SchemaDigest: "digest2"},
+			inventory.Resource{Type: inventory.ResourceTable, ID: "t1", ParentID: "db1", Name: "One", SchemaDigest: "digest1"},
+			inventory.Resource{Type: inventory.ResourceDatabase, ID: "db1", Name: "Main"},
+		)
+		inv.Sort()
+		return inv
+	}
+
+	m1, err := New("source", buildInv())
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	m2, err := New("source", buildInv())
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	// Normalize the two fields that are correctly fresh per invocation.
+	m2.RunID = m1.RunID
+	m2.CapturedAt = m1.CapturedAt
+
+	b1, err := json.MarshalIndent(m1, "", "  ")
+	if err != nil {
+		t.Fatalf("marshal m1: %v", err)
+	}
+	b2, err := json.MarshalIndent(m2, "", "  ")
+	if err != nil {
+		t.Fatalf("marshal m2: %v", err)
+	}
+	if !bytes.Equal(b1, b2) {
+		t.Fatalf("expected byte-identical manifests for identical inventory content, got:\n--- m1 ---\n%s\n--- m2 ---\n%s", b1, b2)
 	}
 }
 

@@ -28,6 +28,7 @@ func writeCompareTerminal(w io.Writer, title string, res *compare.Result) {
 	fmt.Fprintln(w)
 	fmt.Fprintf(w, "Source:      %s\n", res.SourceLabel)
 	fmt.Fprintf(w, "Destination: %s\n", res.DestLabel)
+	fmt.Fprintf(w, "Policy:      %s\n", res.PolicyName)
 	fmt.Fprintln(w)
 
 	if len(res.Findings) == 0 {

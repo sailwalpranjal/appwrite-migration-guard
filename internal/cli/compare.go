@@ -19,6 +19,7 @@ func RunCompare(_ context.Context, args []string, stdout, stderr io.Writer) int 
 	fs := flag.NewFlagSet("compare", flag.ContinueOnError)
 	fs.SetOutput(stderr)
 	jsonOut := fs.Bool("json", false, "print the comparison result as JSON instead of a terminal summary")
+	strict := fs.Bool("strict", false, "use the strict policy: an unexpected destination resource is BLOCK instead of WARN (see docs/comparison-model.md#policy)")
 	if err := fs.Parse(args); err != nil {
 		return ExitBlock
 	}
@@ -39,7 +40,11 @@ func RunCompare(_ context.Context, args []string, stdout, stderr io.Writer) int 
 		return ExitBlock
 	}
 
-	res := compare.Compare(a.Label, a.Inventory, b.Label, b.Inventory)
+	policy := compare.DefaultPolicy()
+	if *strict {
+		policy = compare.StrictPolicy()
+	}
+	res := compare.CompareWithPolicy(a.Label, a.Inventory, b.Label, b.Inventory, policy)
 
 	if *jsonOut {
 		enc := json.NewEncoder(stdout)
