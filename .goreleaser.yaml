@@ -1,0 +1,65 @@
+version: 2
+
+project_name: amg
+
+before:
+  hooks:
+    - go mod tidy
+
+builds:
+  - id: amg
+    main: ./cmd/amg
+    binary: amg
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - windows
+      - darwin
+    goarch:
+      - amd64
+      - arm64
+    ignore:
+      - goos: windows
+        goarch: arm64
+    ldflags:
+      - -s -w
+      - -X github.com/sailwalpranjal/appwrite-migration-guard/internal/version.Version={{ .Version }}
+      - -X github.com/sailwalpranjal/appwrite-migration-guard/internal/version.Commit={{ .ShortCommit }}
+      - -X github.com/sailwalpranjal/appwrite-migration-guard/internal/version.Date={{ .Date }}
+
+archives:
+  - id: amg
+    formats: [tar.gz]
+    format_overrides:
+      - goos: windows
+        formats: [zip]
+    name_template: >-
+      {{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}
+    files:
+      - README.md
+      - LICENSE
+      - CHANGELOG.md
+      - .env.example
+
+checksum:
+  name_template: "checksums.txt"
+
+changelog:
+  sort: asc
+  use: git
+  filters:
+    exclude:
+      - "^docs:"
+      - "^test:"
+      - "^Merge "
+
+release:
+  github:
+    owner: sailwalpranjal
+    name: appwrite-migration-guard
+  # amg is pre-alpha (see README) — every release is a prerelease until
+  # the project's own honesty rule (never claim more maturity than
+  # verified) is satisfied by an actual stable milestone.
+  prerelease: auto
+  mode: replace

@@ -5,8 +5,8 @@ project. Contributions are welcome, especially:
 
 - Verified Appwrite API behavior (with a link to the source/docs you
   checked) for resource types not yet covered.
-- Bug reports with a reproduction (ideally against the migration lab
-  fixtures once they exist).
+- Bug reports with a reproduction (ideally added as a new scenario in
+  `lab/`, the fault-injection migration lab).
 - Tests for edge cases in pagination, retry, or normalization logic.
 
 ## Ground rules
@@ -29,8 +29,17 @@ project. Contributions are welcome, especially:
 ```bash
 go build ./...
 go vet ./...
-go test ./...
+gofmt -l .   # must be empty; CI fails otherwise
+go test -race ./...
 ```
+
+## Releasing
+
+Releases are built by [GoReleaser](https://goreleaser.com) via
+`.github/workflows/release.yml`, triggered by pushing a tag matching
+`vX.Y.Z`. There is no manual release process — pushing the tag is the
+whole release. Only the maintainer does this; it's a visible, public
+action.
 
 ## Commit / PR style
 

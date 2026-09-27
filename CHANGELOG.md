@@ -7,6 +7,19 @@ follows [Keep a Changelog](https://keepachangelog.com/).
 
 ### Added
 
+- Release automation: `.goreleaser.yaml` + `.github/workflows/release.yml`
+  build Linux/macOS/Windows binaries (amd64 + arm64, minus Windows/arm64)
+  on every `vX.Y.Z` tag push, with version/commit/date injected via
+  `-ldflags`, archived with README/LICENSE/CHANGELOG/.env.example,
+  checksummed, and published as a GitHub prerelease (amg is pre-alpha).
+  Validated locally, not just config-checked: installed GoReleaser,
+  ran `goreleaser check` (config valid), `goreleaser build --snapshot`
+  (all 5 targets actually compile), and `goreleaser release --snapshot
+  --skip=publish` (archives + checksums produced correctly) — then ran
+  the resulting Windows binary directly and confirmed `amg version`
+  reports the correct injected version/commit/date. This is the last of
+  the original 8 roadmap items.
+
 - `lab/`: the fault-injection migration lab (spec section 33), 8
   deterministic scenarios (A-G, missing table, missing file, permission
   change, expected timestamp transformation, transient failure/retry,

@@ -18,10 +18,11 @@
 > collision, and confirmed amg caught every one of them. What's still
 > missing is *breadth*, not depth: legacy Databases
 > (collections/documents) and Sites aren't inventoried yet (explicitly
-> marked `UNSUPPORTED`, never silently skipped), and there's no
-> fault-injection lab or release binaries yet — see
-> [Roadmap](#roadmap). This README describes what exists today, not the
-> finished product.
+> marked `UNSUPPORTED`, never silently skipped). The original roadmap's
+> 8 items are now all done, including a fault-injection lab (`lab/`,
+> runs in CI) and validated release automation — see
+> [Roadmap](#roadmap). This README describes what exists today, not a
+> finished, battle-tested product: it's pre-alpha, verified but young.
 
 ## The problem
 
@@ -75,6 +76,15 @@ git clone https://github.com/sailwalpranjal/appwrite-migration-guard
 cd appwrite-migration-guard
 go build -o amg ./cmd/amg
 ```
+
+Release automation (`.goreleaser.yaml`, `.github/workflows/release.yml`,
+[GoReleaser](https://goreleaser.com)) is in place to build Linux/macOS/
+Windows binaries (amd64 + arm64, minus Windows/arm64) on every `vX.Y.Z`
+tag — validated locally with `goreleaser build --snapshot` and
+`goreleaser release --snapshot --skip=publish` (all 5 targets build,
+archive, and the resulting binary runs and reports the correct injected
+version). No tag has been pushed yet, though — until the first release,
+building from source is the only option.
 
 ## Quick start
 
@@ -391,7 +401,8 @@ every push (`.github/workflows/ci.yml`).
 6. ~~Static HTML reporting (`amg report`)~~ — done, alongside JSON/text.
 7. ~~Fault-injection migration lab + CI~~ — done (`lab/`, runs in CI on
    every push, `gofmt`/`go vet`/`go test -race`/`go build`).
-8. Cross-platform release binaries.
+8. ~~Cross-platform release binaries~~ — automation done and locally
+   validated; no tag pushed yet, so no release exists on GitHub yet.
 
 ## Contributing
 
