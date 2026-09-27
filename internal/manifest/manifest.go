@@ -5,6 +5,7 @@
 package manifest
 
 import (
+	"bytes"
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
@@ -90,6 +91,7 @@ func Read(path string) (*Manifest, error) {
 		}
 		return nil, errs.New(errs.KindConfiguration, "manifest.Read", err)
 	}
+	b = trimUTF8BOM(b)
 	var m Manifest
 	if err := json.Unmarshal(b, &m); err != nil {
 		return nil, errs.New(errs.KindInvalidResponse, "manifest.Read", fmt.Errorf("decode %q: %w", path, err))
@@ -105,4 +107,16 @@ func Read(path string) (*Manifest, error) {
 			fmt.Errorf("%q has schema_version %d, newer than this build supports (%d) — upgrade amg before reading it", path, m.SchemaVersion, SchemaVersion))
 	}
 	return &m, nil
+}
+
+// trimUTF8BOM strips a leading UTF-8 byte-order mark, if present.
+// encoding/json treats a BOM as invalid JSON and refuses to decode it,
+// but a BOM-prefixed file is a real thing amg will be handed: on
+// Windows, PowerShell's `>` redirection (the natural way to capture
+// `amg snapshot`'s or a JSON tool's output, and PowerShell is amg's
+// documented Windows shell) writes UTF-8 output with a BOM by default.
+// Silently tolerating it here means a manifest someone captured that
+// way still reads correctly instead of failing to decode.
+func trimUTF8BOM(b []byte) []byte {
+	return bytes.TrimPrefix(b, []byte{0xEF, 0xBB, 0xBF})
 }

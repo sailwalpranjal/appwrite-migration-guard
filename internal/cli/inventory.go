@@ -31,6 +31,7 @@ func RunInventory(ctx context.Context, args []string, stdout, stderr io.Writer) 
 	noCounts := fs.Bool("no-row-counts", false, "skip per-table row counts (metadata only)")
 	sampleRows := fs.Int("sample-rows", 0, "fetch up to N rows per table (ordered by $id) and record a content digest for each; 0 disables sampling (default). This reads real row data — opt in deliberately.")
 	concurrency := fs.Int("concurrency", inventory.DefaultConcurrency, "maximum concurrent Appwrite requests")
+	timeout := fs.Duration("timeout", inventoryTimeout, "maximum time to allow the whole inventory run — raise this for large projects (many tables/rows/files/users) that don't finish within the default")
 	if err := fs.Parse(args); err != nil {
 		return exitForParseError(err)
 	}
@@ -43,7 +44,7 @@ func RunInventory(ctx context.Context, args []string, stdout, stderr io.Writer) 
 	}
 
 	client := appwrite.New(env)
-	runCtx, cancel := context.WithTimeout(ctx, inventoryTimeout)
+	runCtx, cancel := context.WithTimeout(ctx, *timeout)
 	defer cancel()
 
 	inv, err := inventory.Collect(runCtx, client, env.Endpoint, env.ProjectID, inventory.Options{

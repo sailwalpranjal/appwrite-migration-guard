@@ -2,6 +2,7 @@ package cli
 
 import (
 	"context"
+	"flag"
 	"fmt"
 	"io"
 	"time"
@@ -17,7 +18,14 @@ const doctorTimeout = 10 * time.Second
 // correctly and, if credentials are present, that the target Appwrite
 // endpoint is reachable and the API key is valid. It never mutates
 // anything and never requires a destination environment.
-func RunDoctor(ctx context.Context, _ []string, stdout, stderr io.Writer) int {
+func RunDoctor(ctx context.Context, args []string, stdout, stderr io.Writer) int {
+	fs := flag.NewFlagSet("doctor", flag.ContinueOnError)
+	fs.SetOutput(stderr)
+	timeout := fs.Duration("timeout", doctorTimeout, "maximum time to allow the reachability/auth check — raise this for a high-latency self-hosted endpoint")
+	if err := fs.Parse(args); err != nil {
+		return exitForParseError(err)
+	}
+
 	_ = config.LoadDotEnv(".env")
 
 	var list Checklist
@@ -31,7 +39,7 @@ func RunDoctor(ctx context.Context, _ []string, stdout, stderr io.Writer) int {
 	list.Pass("Configuration (APPWRITE_ENDPOINT/PROJECT_ID/API_KEY present)")
 
 	client := appwrite.New(env)
-	runCtx, cancel := context.WithTimeout(ctx, doctorTimeout)
+	runCtx, cancel := context.WithTimeout(ctx, *timeout)
 	defer cancel()
 
 	v, err := client.Version(runCtx)

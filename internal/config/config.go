@@ -67,8 +67,22 @@ func LoadDotEnv(path string) error {
 	defer f.Close()
 
 	scanner := bufio.NewScanner(f)
+	firstLine := true
 	for scanner.Scan() {
-		line := strings.TrimSpace(scanner.Text())
+		line := scanner.Text()
+		if firstLine {
+			// A leading UTF-8 byte-order-mark rune (U+FEFF) on the
+			// file's first line would otherwise silently prefix the
+			// first variable's key, so os.LookupEnv never matches the
+			// real name and Environment.Validate reports it as missing
+			// — a confusing failure since the value is visibly right
+			// there in the file. Windows editors (Notepad, and some
+			// VS Code configurations) commonly save UTF-8 with a BOM,
+			// and this is amg's documented Windows config file.
+			line = strings.TrimPrefix(line, string(rune(0xFEFF)))
+			firstLine = false
+		}
+		line = strings.TrimSpace(line)
 		if line == "" || strings.HasPrefix(line, "#") {
 			continue
 		}

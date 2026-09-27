@@ -84,6 +84,15 @@ func readResult(path string) (*compare.Result, error) {
 	if err != nil {
 		return nil, err
 	}
+	// Tolerate a leading UTF-8 BOM: encoding/json treats it as invalid
+	// JSON, but it's a real thing this file will have in practice — on
+	// Windows, PowerShell's `>` redirection (the natural way to capture
+	// `amg compare --json`/`amg verify --json`'s output, and PowerShell
+	// is amg's documented Windows shell) writes UTF-8 with a BOM by
+	// default. Reproduced live: `amg verify --json > result.json` in
+	// PowerShell followed by `amg report result.json` failed to decode
+	// the BOM-prefixed file before this fix.
+	b = bytes.TrimPrefix(b, []byte{0xEF, 0xBB, 0xBF})
 	var res compare.Result
 	if err := json.Unmarshal(b, &res); err != nil {
 		return nil, fmt.Errorf("decode: %w", err)

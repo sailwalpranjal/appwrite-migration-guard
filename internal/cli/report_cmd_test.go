@@ -123,6 +123,33 @@ func TestRunReport_MissingFile(t *testing.T) {
 	}
 }
 
+// TestRunReport_TolerantOfLeadingBOM is a regression guard for a real
+// bug reproduced live: `./amg verify --json > result.json` on Windows
+// PowerShell writes UTF-8 with a leading byte-order mark (PowerShell's
+// `>` redirection default, and PowerShell is amg's documented Windows
+// shell), and encoding/json treats a BOM as invalid JSON — so the exact
+// documented `verify --json > result.json` then `report result.json`
+// workflow failed to decode the BOM-prefixed file before this fix.
+func TestRunReport_TolerantOfLeadingBOM(t *testing.T) {
+	dir := t.TempDir()
+	res := sampleResult(compare.SeverityPass)
+	b, err := json.Marshal(res)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	path := filepath.Join(dir, "result.json")
+	bom := append([]byte{0xEF, 0xBB, 0xBF}, b...)
+	if err := os.WriteFile(path, bom, 0o644); err != nil {
+		t.Fatalf("write BOM-prefixed result: %v", err)
+	}
+
+	var stdout, stderr bytes.Buffer
+	code := RunReport(context.Background(), []string{path}, &stdout, &stderr)
+	if code != ExitOK {
+		t.Fatalf("expected ExitOK reading a BOM-prefixed result, got %d; stderr:\n%s", code, stderr.String())
+	}
+}
+
 func TestRunReport_MissingArgs(t *testing.T) {
 	var stdout, stderr bytes.Buffer
 	code := RunReport(context.Background(), nil, &stdout, &stderr)

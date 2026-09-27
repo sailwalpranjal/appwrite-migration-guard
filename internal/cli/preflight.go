@@ -28,6 +28,7 @@ func RunPreflight(ctx context.Context, args []string, stdout, stderr io.Writer) 
 	fs := flag.NewFlagSet("preflight", flag.ContinueOnError)
 	fs.SetOutput(stderr)
 	concurrency := fs.Int("concurrency", inventory.DefaultConcurrency, "maximum concurrent Appwrite requests per side")
+	timeout := fs.Duration("timeout", preflightTimeout, "maximum time to allow the whole preflight run — raise this for large projects that don't finish within the default")
 	if err := fs.Parse(args); err != nil {
 		return exitForParseError(err)
 	}
@@ -54,7 +55,7 @@ func RunPreflight(ctx context.Context, args []string, stdout, stderr io.Writer) 
 		return list.ExitCode()
 	}
 
-	runCtx, cancel := context.WithTimeout(ctx, preflightTimeout)
+	runCtx, cancel := context.WithTimeout(ctx, *timeout)
 	defer cancel()
 
 	srcClient := appwrite.New(srcEnv)

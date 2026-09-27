@@ -15,7 +15,7 @@ import (
 // script or CI step checking the exit code. Only commands that actually
 // parse flags are exercised here (doctor and version take none).
 func TestSubcommands_Help_ExitsOK(t *testing.T) {
-	for _, name := range []string{"compare", "inventory", "preflight", "report", "snapshot", "verify"} {
+	for _, name := range []string{"compare", "doctor", "inventory", "preflight", "report", "snapshot", "verify"} {
 		cmd, ok := Lookup(name)
 		if !ok {
 			t.Fatalf("command %q not found in registry", name)
@@ -34,7 +34,7 @@ func TestSubcommands_Help_ExitsOK(t *testing.T) {
 // parse failure (not a help request) must still exit ExitBlock, proving
 // exitForParseError didn't accidentally make every parse error succeed.
 func TestSubcommands_UnknownFlag_StillBlocks(t *testing.T) {
-	for _, name := range []string{"compare", "inventory", "preflight", "report", "snapshot", "verify"} {
+	for _, name := range []string{"compare", "doctor", "inventory", "preflight", "report", "snapshot", "verify"} {
 		cmd, _ := Lookup(name)
 		var stdout, stderr bytes.Buffer
 		code := cmd.Run(context.Background(), []string{"--this-flag-does-not-exist"}, &stdout, &stderr)
