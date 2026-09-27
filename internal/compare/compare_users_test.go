@@ -33,7 +33,7 @@ func TestCompare_UserLabelsChanged_Blocks(t *testing.T) {
 	}
 }
 
-// Regression guard: found via self-review. List-valued metadata (labels,
+// Regression guard: list-valued metadata (labels,
 // allowed_file_extensions, ...) must compare as an order-independent
 // set, in both its native []string form and its []any form after a
 // manifest round-trips through JSON — Appwrite does not guarantee list

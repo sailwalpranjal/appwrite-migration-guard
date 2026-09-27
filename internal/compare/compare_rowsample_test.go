@@ -74,11 +74,11 @@ func TestCompare_RowSampleUnexpected_Warns(t *testing.T) {
 }
 
 // TestCompareWithPolicy_Strict_BlocksRowSampleUnexpected is a regression
-// guard from self-review: StrictPolicy's whole purpose is to catch
-// unexpected destination content, and a sampled row present on the
-// destination but absent from the source is exactly that at the row
-// level — it must be raised together with RuleUnexpectedResource, not
-// left behind at a fixed WARN.
+// guard: StrictPolicy's whole purpose is to catch unexpected
+// destination content, and a sampled row present on the destination but
+// absent from the source is exactly that at the row level — it must be
+// raised together with RuleUnexpectedResource, not left behind at a
+// fixed WARN.
 func TestCompareWithPolicy_Strict_BlocksRowSampleUnexpected(t *testing.T) {
 	src := inv(tableWithSamples("t1", nil))
 	dst := inv(tableWithSamples("t1", []inventory.RowSample{{ID: "r1", Digest: "aaa"}}))

@@ -62,11 +62,11 @@ func TestRead_MissingFile(t *testing.T) {
 	}
 }
 
-// Regression guard, from an external audit: manifest.Read previously
-// accepted a manifest of any schema_version with no check at all, unlike
-// amg report's equivalent check for compare.Result. A future schema
-// version could carry fields (or reinterpreted meanings of existing
-// ones) this build doesn't know about — reading it anyway risks
+// Regression guard: manifest.Read previously accepted a manifest of any
+// schema_version with no check at all, unlike amg report's equivalent
+// check for compare.Result. A future schema version could carry fields
+// (or reinterpreted meanings of existing ones) this build doesn't know
+// about — reading it anyway risks
 // comparing on a wrong assumption instead of refusing outright.
 func TestRead_RejectsNewerSchemaVersion(t *testing.T) {
 	inv := inventory.New("https://example.com/v1", "proj1")
@@ -95,8 +95,6 @@ func TestRead_RejectsNewerSchemaVersion(t *testing.T) {
 // given identical inventory content, two independently-created manifests
 // must serialize to byte-identical JSON once the two fields that are
 // *intentionally* fresh per run (RunID, CapturedAt) are normalized out.
-// Without this test, "deterministic" was an architectural claim, not a
-// demonstrated one — an external audit specifically challenged this gap.
 func TestWrite_DeterministicAsideFromRunIDAndTimestamp(t *testing.T) {
 	buildInv := func() *inventory.Inventory {
 		inv := inventory.New("https://example.com/v1", "proj1")

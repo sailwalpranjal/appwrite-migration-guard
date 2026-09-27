@@ -49,9 +49,8 @@ func TestPartialVerificationReason(t *testing.T) {
 	}
 }
 
-// Regression guard for the self-review finding: a row-sampling failure
-// with a perfectly fine row count must never be reported as a row-count
-// problem.
+// Regression guard: a row-sampling failure with a perfectly fine row
+// count must never be reported as a row-count problem.
 func TestRunInventory_SampleFailureDoesNotClaimCountFailure(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {

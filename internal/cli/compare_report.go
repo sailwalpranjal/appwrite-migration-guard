@@ -46,11 +46,10 @@ func writeCompareTerminal(w io.Writer, title string, res *compare.Result) {
 
 // coverageNote is printed on every compare/verify/report result,
 // PASS included — a PASS here means "no difference found within what
-// amg checks," not "this migration is proven correct." Making this
-// explicit on every run (not just in docs a reader might not open) is a
-// direct response to the most serious criticism an external audit of
-// this project raised: that a green result could be over-read as a
-// stronger guarantee than the implementation actually provides. See
+// amg checks," not "this migration is proven correct." A green result
+// could otherwise be over-read as a stronger guarantee than amg
+// actually provides, so this is printed on every run, not just
+// documented somewhere a reader might not open. See
 // docs/comparison-model.md for the full rule table this summarizes.
 const coverageNote = `Verification coverage (always applies, this run and every run):
   Always checked:  resource existence, permissions, config, table schema

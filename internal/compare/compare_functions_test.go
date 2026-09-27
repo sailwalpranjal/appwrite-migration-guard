@@ -60,9 +60,9 @@ func TestCompare_FunctionIdentical_Pass(t *testing.T) {
 	}
 }
 
-// Regression guard: found via self-review. deployment_retention was
-// collected into Metadata but not included in comparedMetadataKeys, so
-// a real config difference there would have silently passed.
+// Regression guard: deployment_retention was collected into Metadata
+// but not included in comparedMetadataKeys, so a real config difference
+// there would have silently passed.
 func TestCompare_FunctionDeploymentRetentionChanged_Blocks(t *testing.T) {
 	src := inv(function("fn1", "Cleanup", nil, map[string]any{"deployment_retention": 25}))
 	dst := inv(function("fn1", "Cleanup", nil, map[string]any{"deployment_retention": 1}))

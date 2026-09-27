@@ -142,12 +142,12 @@ func TestHealth_RateLimit_RespectsServerRetryAfter(t *testing.T) {
 }
 
 // TestHealth_RateLimit_RetryAfterZero_RetriesImmediately is a regression
-// test for a bug caught in self-review: errs.RetryAfterOf used
-// `e.RetryAfter > 0` to decide whether a server-suggested delay was
-// present, which silently treated a genuine "Retry-After: 0" the same as
-// "no header at all" and fell back to amg's own (here, much longer)
-// backoff. A server sending Retry-After: 0 is asking for an immediate
-// retry, so the client should not wait out its configured backoff first.
+// test: errs.RetryAfterOf used `e.RetryAfter > 0` to decide whether a
+// server-suggested delay was present, which silently treated a genuine
+// "Retry-After: 0" the same as "no header at all" and fell back to
+// amg's own (here, much longer) backoff. A server sending
+// Retry-After: 0 is asking for an immediate retry, so the client should
+// not wait out its configured backoff first.
 func TestHealth_RateLimit_RetryAfterZero_RetriesImmediately(t *testing.T) {
 	calls := 0
 	var firstCallAt, secondCallAt time.Time

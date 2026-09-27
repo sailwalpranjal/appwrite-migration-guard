@@ -102,10 +102,10 @@ func TestCompare_UnexpectedResource_Warns(t *testing.T) {
 }
 
 // TestCompareWithPolicy_Strict_BlocksUnexpectedResource is a regression
-// guard for the policy/severity separation an external audit asked for:
-// unexpected_resource's severity is a genuine policy choice (see Policy's
-// doc comment), not a fixed comparison fact, so StrictPolicy must be able
-// to promote it to BLOCK without touching any other rule's severity.
+// guard for the policy/severity separation: unexpected_resource's
+// severity is a genuine policy choice (see Policy's doc comment), not a
+// fixed comparison fact, so StrictPolicy must be able to promote it to
+// BLOCK without touching any other rule's severity.
 func TestCompareWithPolicy_Strict_BlocksUnexpectedResource(t *testing.T) {
 	src := inv()
 	dst := inv(table("t1", "db1", "Widgets", nil, nil, 5))
@@ -192,13 +192,12 @@ func TestCompare_TimestampsNeverCompared(t *testing.T) {
 	}
 }
 
-// Directly addresses an external audit's core P0 finding: table
-// comparison originally checked only enabled/row_security metadata, not
-// the actual column/index schema — so "email required varchar(255)" ->
-// "email optional varchar(20)" could pass undetected. schema_changed
-// catches this via a content digest over columns+indexes (see
-// appwrite.schemaDigest), the same digest-not-enumerate pattern already
-// proven for row sampling.
+// Table comparison originally checked only enabled/row_security
+// metadata, not the actual column/index schema — so "email required
+// varchar(255)" -> "email optional varchar(20)" could pass undetected.
+// schema_changed catches this via a content digest over columns+indexes
+// (see appwrite.schemaDigest), the same digest-not-enumerate pattern
+// already proven for row sampling.
 func TestCompare_SchemaChanged_Blocks(t *testing.T) {
 	src := table("t1", "db1", "Widgets", nil, nil, 0)
 	src.SchemaDigest = "digest-with-required-email-varchar255"

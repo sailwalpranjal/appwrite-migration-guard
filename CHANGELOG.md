@@ -7,459 +7,218 @@ follows [Keep a Changelog](https://keepachangelog.com/).
 
 ### Added
 
-- Two new `lab/` fault-injection scenarios (H, I) grounded in real,
-  verified Appwrite bugs rather than invented ones — fetched and read in
-  full via `gh api` (not just a title/summary) before being encoded as
-  tests, in response to an audit criticism that the lab's prior 8
-  scenarios were entirely hypothetical. Scenario H
-  (`TestScenarioH_HalfMigratedTableSchema_Blocks`) models
-  appwrite/appwrite#12770 (closed): a self-hosted 1.9.0->1.9.5 upgrade
-  silently dropped two columns from the `functions` table's schema —
-  proves `schema_changed` fires on a table that loses a column between
-  snapshots. Scenario I
-  (`TestScenarioI_ValidationError_SurfacesRealMessage_NotMaskedAsConnectivity`)
-  models appwrite/appwrite#13477 (open): Appwrite's own
-  `Migrations/Appwrite/Report/Get.php` catches a real exception and
-  rethrows a generic connectivity message, masking the actual cause —
-  proves amg's own error classification doesn't compound that by
-  further masking whatever specific message a server does send. A
-  matching unit-level test,
-  `TestHealth_ValidationError_SurfacesRealMessage`, was added to
-  `internal/appwrite/client_test.go`.
-  Self code-reviewed before landing; the review caught a real
-  inaccuracy — the initial description said "Appwrite's own console"
-  discarded the validation message, but re-reading the full issue body
-  (not just its title) showed the masking happens server-side in
-  `Get.php`'s catch-and-rethrow, before the response ever reaches the
-  console. Fixed in all three places the claim appeared (README,
-  client_test.go, lab_test.go) after re-verifying against the issue's
-  own "Root cause analysis" section.
-- HTML report redesign, driven by an independent design review: badges
-  now fill with a tinted background instead of outline-only, table rows
-  get zebra striping and hover state, a sticky client-side filter/search
-  toolbar (vanilla JS, degrades to the full unfiltered table with JS
-  off) lets you toggle PASS/WARN/BLOCK and search rule/resource/message
-  text, an explicit light/dark theme toggle persists via localStorage
-  (wrapped in try/catch since it must survive `file://`) alongside the
-  existing automatic `prefers-color-scheme`, a per-resource-type
-  findings breakdown table was added, WARN/BLOCK colors in dark mode
-  were changed from unchanged light-mode hex values to GitHub's own
-  darker-background-appropriate tokens, and the findings table is now
-  wrapped for horizontal scroll instead of breaking on narrow viewports.
-  Live-verified: generated a real report from a real compare run against
-  a live Appwrite project (permission + config + unexpected-resource
-  drift) and screenshotted it with headless Chrome in both system-dark
-  and forced-light rendering.
-- Fixed a P0 bug an external PM-level release-readiness review found:
-  every subcommand's `-h`/`--help` printed correct usage text but
-  exited 2 (`ExitBlock`) — identical to a real failure, and
-  indistinguishable from one by any script or CI step checking the exit
-  code. `amg <cmd> --help`/`-h` now exits 0, verified for all six
-  flag-parsing subcommands both live and in a new
-  `TestSubcommands_Help_ExitsOK`; a companion
-  `TestSubcommands_UnknownFlag_StillBlocks` proves a genuine parse error
-  still exits BLOCK.
-- Reordered `amg --help`'s command list to match the README's Quick
-  Start / Example workflow order (doctor -> inventory -> snapshot ->
-  compare -> verify -> preflight -> report), closing a mismatch the same
-  PM review flagged as an avoidable "did I miss a step" moment.
-- `.github/ISSUE_TEMPLATE/` (bug report, verified-API-behavior report),
-  `.github/PULL_REQUEST_TEMPLATE.md`, and `CODE_OF_CONDUCT.md`
-  (Contributor Covenant v2.1) — all flagged as missing by the same
-  review for a project explicitly trying to get real GitHub adoption.
-- README: documented `go install ...@main` (the only install path that
-  currently works via the Go module proxy, since no tag has been pushed
-  yet — `@latest` fails).
-
-### Changed
-
-- README's status blurb and testing section were rewritten for tone, at
-  the user's explicit request, after a second external audit flagged
-  "extensive defensive qualification" as an AI-authorship fingerprint
-  worth challenging regardless of actual authorship. The dense,
-  paragraph-form description of nine live-verification runs became a
-  table (same facts, same evidence, no content removed), and repeated
-  self-rebutting phrasing ("but every command is real...") was cut in
-  favor of plain statements with links to the evidence.
-
-### Investigated
-
-- Ran a read-only audit for fake/hardcoded/stubbed logic across
-  internal/, cmd/, and lab/ in response to the user's explicit request
-  ("no hard-coded fake data should be there"). No findings: every
-  conditional branch traced back to real logic, no TODO/stub/placeholder
-  comments exist, the only recurring "magic number" (5000, Appwrite's
-  own row-count cap) is documented at each use site, and every
-  README/--help-documented command traces to a real implementation.
-
-- Pagination now detects any duplicated or empty resource ID across the
-  *entire* paginated result, not just a check on each page's last item.
-  Closes a specific gap from a second external audit: the previous guard
-  would miss a server bug that repeats a resource on a later page while
-  the cursor still nominally advances. Added
-  `TestListDatabases_LargeDataset_NoPageLossOrDuplication` (10,001
-  resources across ~101 pages, proving no loss/duplication/reordering)
-  and `TestListDatabases_DuplicateAcrossPages` (a page that repeats an
-  earlier resource) to `internal/appwrite/pagination_test.go`.
-- `compare.Policy`: comparison facts and the severity decision made about
-  them are now separated, closing another gap the same audit raised —
-  the engine previously hard-coded "an unexpected destination resource is
-  always WARN" directly into comparison logic. `DefaultPolicy` keeps that
-  behavior; `StrictPolicy` (`--strict` on `amg compare`/`amg verify`)
-  raises both `unexpected_resource` and its row-level analogue
-  `row_sample_unexpected` to BLOCK — appropriate for a pre-cutover
-  production gate where unexpected destination content is itself a
-  finding worth stopping for. `compare.Result.PolicyName` records which
-  policy produced a saved result. This is deliberately narrow: every
-  other rule (missing_resource, permission_changed, schema_changed, ...)
-  has no comparable ambiguity and was not given a policy knob.
-- `docs/known-false-negatives.md`: a concrete, table-form list of
-  specific differences amg's current checks will not catch, requested
-  directly by the audit ("if he refuses to document false negatives,
-  that's a serious product maturity concern").
-- `docs/assurance-boundary.md`: an explicit answer to "what exactly does
-  PASS prove, and what does it not prove," plus a framework
-  (SOURCE/LIVE/TEST/ASSUMPTION) for classifying every "verified" claim
-  in this repository by the kind of evidence actually behind it —
-  directly requested by the audit.
-
-Self code-reviewed before landing; caught and fixed two real issues:
-the per-item pagination duplicate check made the pre-existing
-"cursor did not advance" check dead code (removed, with the doc comment
-corrected to describe one unified check rather than two); and
-`StrictPolicy` only affected `unexpected_resource`, leaving its row-level
-equivalent (`row_sample_unexpected`) fixed at WARN even though it's the
-same "unexpected destination content" question `StrictPolicy`'s own doc
-comment describes as the reason to use it — fixed by having both rules
-share one `Policy.UnexpectedSeverity` field, with a new regression test
-(`TestCompareWithPolicy_Strict_BlocksRowSampleUnexpected`).
-
-- Table schema (column/index) drift detection. `appwrite.ListTables` now
-  computes a `SchemaDigest` for every table — a SHA-256 hash of its
-  columns and indexes, canonicalized (transient fields stripped, entries
-  sorted by `key`) so the digest is stable across reordering and
-  server-side status transitions but changes if and only if an actual
-  column/index definition changed. `compare` now emits `schema_changed`
-  (BLOCK) when digests differ and `schema_unverified` (WARN) when a
-  digest is missing on either side. This was the most concrete gap named
-  in an external audit of the project: amg previously verified table
-  *existence* and row content/counts but never that a table's actual
-  column/index shape matched between source and destination. See
-  docs/comparison-model.md#schema-verification.
-- `amg` now actually honors a `Retry-After` response header on HTTP 429
-  from Appwrite, instead of always falling back to its own (much
-  shorter) configured backoff — closing a gap where amg could hammer a
-  rate-limited server faster than the server itself asked for. Parses
-  the delay-seconds form only (not HTTP-date, a disclosed limitation
-  rather than a guess), capped at 2 minutes.
-- `manifest.Read` now fails closed on a manifest with a newer
+- Two `lab/` fault-injection scenarios modeled on real Appwrite bugs:
+  a table that loses a column mid-migration (appwrite/appwrite#12770)
+  now triggers `schema_changed`, and a masked server validation error
+  (appwrite/appwrite#13477) is proven not to get further masked by
+  amg's own error classification (`TestHealth_ValidationError_SurfacesRealMessage`).
+- HTML report redesign: filled status badges, zebra-striped/hoverable
+  table rows, a sticky client-side filter/search toolbar (vanilla JS,
+  degrades cleanly with JS off), an explicit light/dark toggle
+  (persisted via `localStorage`) alongside automatic
+  `prefers-color-scheme`, a per-resource-type findings breakdown table,
+  dark-mode-appropriate WARN/BLOCK colors, and a horizontal-scroll
+  wrapper so the findings table doesn't break on narrow viewports.
+- Fixed `amg <cmd> --help`/`-h` exiting 2 instead of 0 for every
+  subcommand — it printed correct usage text but reported the same exit
+  code as a real failure. A bad flag still exits BLOCK as before.
+- Reordered `amg --help`'s command list to match the README's
+  walkthrough order (doctor, inventory, snapshot, compare, verify,
+  preflight, report).
+- `.github/ISSUE_TEMPLATE/`, `.github/PULL_REQUEST_TEMPLATE.md`,
+  `CODE_OF_CONDUCT.md` (Contributor Covenant v2.1).
+- README: documented `go install .../cmd/amg@main` (the only install
+  path that works before the first tag), and a new section on getting a
+  real Appwrite Cloud or self-hosted project/API key to test against.
+- `compare.Policy`: severity for "the destination has something the
+  source didn't" is now a policy choice, not hard-coded.
+  `DefaultPolicy` keeps the original WARN behavior;
+  `StrictPolicy` (`--strict` on `compare`/`verify`) raises
+  `unexpected_resource` and its row-level counterpart
+  `row_sample_unexpected` to BLOCK, for a pre-cutover gate where
+  unexpected destination content should stop the run.
+  `compare.Result.PolicyName` records which policy produced a result.
+- `docs/known-false-negatives.md`: specific differences amg's current
+  checks won't catch, in table form.
+- `docs/assurance-boundary.md`: what a PASS result does and doesn't
+  prove, and a SOURCE/LIVE/TEST/ASSUMPTION classification for every
+  "verified" claim in this repository.
+- Table schema (column/index) drift detection. `appwrite.ListTables`
+  computes a `SchemaDigest` per table — a canonicalized SHA-256 hash of
+  its columns and indexes — and `compare` emits `schema_changed`
+  (BLOCK) or `schema_unverified` (WARN, digest missing on one side).
+  See docs/comparison-model.md#schema-verification.
+- `amg` now honors a server's `Retry-After` header on HTTP 429 instead
+  of always falling back to its own shorter backoff (delay-seconds
+  form only, capped at 2 minutes).
+- `manifest.Read` fails closed on a manifest with a newer
   `schema_version` than the running build supports, matching the check
-  `amg report` already had for `compare.Result` — closing an
-  inconsistency an external audit correctly flagged.
-- `amg compare`/`verify`/`report` (both terminal and HTML output) now
-  print an explicit verification-coverage summary after every result,
-  PASS included: what's checked, what's checked only if enabled, and
-  what's never checked. Responds directly to an external audit's central
-  criticism — that a green PASS could be over-read as a stronger
-  guarantee than the implementation provides — by making the boundary
-  visible on every run rather than only in docs a reader might not open.
-- README: added a "Product boundary" section explicitly naming what amg
-  will not do (relationship-integrity verification, runtime behavior
-  probes, application-level invariants, policy/approval workflows,
-  backup/rollback verification) and why — these were demanded by the
-  same external audit but fall outside amg's stated scope (spec's
-  product-boundary/non-goals) into a materially different, larger
-  product. Also corrected the "breadth, not depth" status line (schema
-  drift was a real depth gap, now closed) and softened `verify`'s
-  description to state precisely what it checks rather than implying a
-  general migration-correctness proof.
-
-Self code-reviewed before landing; the review caught two real issues,
-both fixed:
-- `errs.RetryAfterOf` used `RetryAfter > 0` to detect a server-supplied
-  delay, which silently treated a legitimate `Retry-After: 0` the same
-  as "no header at all" and fell back to amg's own longer backoff —
-  exactly backwards from the fix's intent. Fixed with an explicit
-  presence flag (`hasRetryAfter`) instead of a zero-value check, with a
-  new regression test (`TestHealth_RateLimit_RetryAfterZero_RetriesImmediately`)
-  proving a zero-delay header is honored.
-- The coverage note's "Checked if enabled" line grouped Storage file
-  content (verified unconditionally, every run, via MD5) together with
-  row sampling (genuinely opt-in) — self-contradictory in a note whose
-  purpose is to prevent over-reading amg's guarantees. Reworded to
-  "Always checked" / "Checked if enabled" in both the terminal and HTML
-  output.
-Live-verified against a real Appwrite Cloud project: created a table
-with a string column, snapshotted, widened the column
-(`size: 50 -> 100`), snapshotted again, and confirmed `amg compare`
-reports `schema_changed` → BLOCK with the two differing digests, while
-comparing a manifest against itself stays PASS (no false positive from
-canonicalization order/status-field handling).
-
-### Documentation
-
-- Added CI/Go Report Card/pkg.go.dev/License badges to the README.
-- Compressed the top status blurb from a 20+ line wall of text down to
-  a few sentences, moving detailed verification evidence into the
-  existing Testing section rather than duplicating it up top.
-- Added a real screenshot of `amg report --format html`'s output
-  (`docs/images/report-example.png`) to the Example report section —
-  rendered with headless Chrome from genuine `amg compare`/`report`
-  output (synthetic project/resource names, real tool, not a mockup),
-  then re-generated once to remove a `PASS`-severity row from the demo
-  data that didn't reflect how the real engine behaves (it never emits
-  a Finding for a resource with no differences).
-
-### Added
-
-- Sites inventory and comparison (config only: framework, build/install/
-  start commands, output directory, timeout, etc. — never `vars`, for
-  the same env-var-secrets reason as Functions).
-- A real finding, not a feature: legacy Databases (collections/documents)
-  never needed a separate collector. Verified live that `POST
-  /v1/tablesdb` + `GET /v1/databases` (the legacy list endpoint) return
-  byte-for-byte identical data for the same resource, and by source
-  that the table/collection layer queries the identical internal
-  storage (`$dbForProject->find('database_{sequence}', ...)` in both
-  endpoints' controllers) — the legacy API is marked
-  `Deprecated(since: '1.8.0')` in Appwrite's own SDK metadata.
-  `Inventory.Unsupported` is now genuinely empty: every resource type
-  from the original spec is inventoried.
-  Self code-reviewed before landing; the review correctly flagged that
-  the legacy-Databases claim wasn't backed by a live test and that
-  README/architecture.md/migration-semantics.md were left stale — fixed
-  by adding the live database-level verification above (documenting the
-  one part, table/collection-level, that rests on source-code evidence
-  only because the test API key lacked the legacy `collections.read`
-  scope) and updating all three docs.
-
-### Security
-
-- Ran a manual audit of every `internal/appwrite` struct's JSON tags
-  confirming no field named password/hash/email/phone/prefs/vars/
-  secret/token exists anywhere in the client — matches the documented
-  design boundary. Confirmed `CountRows` discards the one row it fetches
-  for counting (only `.Total` is ever returned). Confirmed no `%+v`/
-  `%#v` struct-dump formatting exists anywhere that could accidentally
-  print an `APIKey` field.
-- Ran `govulncheck` against the module (zero direct dependencies, so
-  this mainly checks the standard library) — no vulnerabilities found.
-  Added it as a permanent `security` job in CI, run on every push.
-- Rewrote SECURITY.md, which had gone stale since the foundation stage:
-  it described a project with no Users/Functions/report rendering.
-  Now documents the actual current secret/PII exclusion boundaries per
-  resource type, the HTML report's XSS-safe escaping, and the
-  dependency/supply-chain posture.
-
-### Added
-
-- Release automation: `.goreleaser.yaml` + `.github/workflows/release.yml`
-  build Linux/macOS/Windows binaries (amd64 + arm64, minus Windows/arm64)
-  on every `vX.Y.Z` tag push, with version/commit/date injected via
-  `-ldflags`, archived with README/LICENSE/CHANGELOG/.env.example,
-  checksummed, and published as a GitHub prerelease (amg is pre-alpha).
-  Validated locally, not just config-checked: installed GoReleaser,
-  ran `goreleaser check` (config valid), `goreleaser build --snapshot`
-  (all 5 targets actually compile), and `goreleaser release --snapshot
-  --skip=publish` (archives + checksums produced correctly) — then ran
-  the resulting Windows binary directly and confirmed `amg version`
-  reports the correct injected version/commit/date. This is the last of
-  the original 8 roadmap items.
-
-- `lab/`: the fault-injection migration lab (spec section 33), 8
-  deterministic scenarios (A-G, missing table, missing file, permission
-  change, expected timestamp transformation, transient failure/retry,
-  persistent failure/BLOCK, interrupted run/never-OK — G covers both
-  `inventory.Collect` and the full `amg doctor` CLI layer) run through
-  the real client/pagination/retry/collection/comparison stack against
-  `httptest` servers, not mocked internals. Runs in CI on every push.
-  Added `appwrite.WithBackoff` (mirroring `WithMaxRetries`) so this
-  external package can keep retry-scenario tests fast.
-  Caught and fixed a real bug while writing it: two of the "interrupted
-  run" tests deadlocked on their own cleanup — a channel meant to
-  unblock a stuck HTTP handler was closed by a `defer` that (via Go's
-  LIFO defer order) ran *after* `httptest.Server.Close()`, which itself
-  waits for in-flight handlers to return. Fixed by sleeping past the
-  test's deadline instead of coordinating through a channel.
-  CI (`.github/workflows/ci.yml`) now also fails on unformatted code
-  (`gofmt -l`), not just `go vet`/`go test`/`go build`.
-- Functions inventory and comparison (config only: runtime, schedule,
+  `amg report` already had for `compare.Result`.
+- `amg compare`/`verify`/`report` print a verification-coverage summary
+  after every result (PASS included): what's checked, what's checked
+  only if enabled, what's never checked.
+- README "Product boundary" section: relationship-integrity
+  verification, runtime behavior probes, application-level invariants,
+  policy/approval workflows, and backup/rollback verification are
+  explicitly out of scope, not oversights.
+- Sites inventory and comparison (config only — framework, build/
+  install/start commands, output directory, timeout; never `vars`).
+- Legacy Databases (collections/documents) need no separate collector:
+  `POST /v1/tablesdb` and `GET /v1/databases` return byte-for-byte
+  identical data for the same resource, and the table/collection layer
+  queries the same internal storage in both endpoints' controllers
+  (Appwrite marks the legacy API `Deprecated(since: '1.8.0')`).
+  `Inventory.Unsupported` is now empty — every resource type from the
+  original spec is inventoried.
+- Functions inventory and comparison (config only — runtime, schedule,
   timeout, execute permissions, logging, scopes, deployment retention,
-  version — never behavior/code). `appwrite.Function` deliberately has
-  no field for `vars` (function environment variables), which routinely
-  hold secrets — same pattern as User's excluded fields.
-  Self code-reviewed before landing; fixed 4 findings: a stale doc
-  comment on `Collect` still claiming Functions were unsupported, two
-  collected-but-never-compared metadata fields
-  (`deployment_retention`/`version` were in `Resource.Metadata` but
-  missing from `comparedMetadataKeys`, so real config drift there would
-  have silently passed), and a stale "not yet" line in
-  docs/comparison-model.md.
-  Verified live against Appwrite Cloud: created a real function (whose
-  raw API response included an explicit `"vars":[]` field, confirming
-  the shape this exclusion is designed against), changed its schedule
-  and execute permissions, and `amg compare` correctly reported both —
-  grepping both manifests for `vars`/secret-shaped content found
-  nothing.
-- Users inventory and comparison. `appwrite.User` deliberately has no
-  field for `password`/`hash`/`hashOptions`/`email`/`phone`/`prefs` —
-  even though Appwrite's raw response can include all of them — so
-  `json.Unmarshal` silently drops them; there is nothing for that data
-  to decode into. Only administrative/verification state is collected
-  (enabled/disabled, email/phone verification, MFA, labels) and
-  compared (`config_changed`).
-  Self code-reviewed before landing; fixed a real bug it found:
-  list-valued metadata (a user's `labels`, a bucket's
-  `allowed_file_extensions`) was compared with a literal string
-  comparison, which is order-sensitive — Appwrite doesn't guarantee list
-  ordering, so semantically identical lists returned in a different
-  order would have produced a spurious BLOCK. Fixed with an
-  order-independent comparison (`equalMetadataValue`) that also handles
-  the `[]any` shape a list takes after a manifest round-trips through
-  JSON. The review also caught that this stage's docs didn't actually
-  explain the PII-omission rationale despite code comments pointing to
-  them — fixed in docs/migration-semantics.md.
-  Verified live against Appwrite Cloud: created a real user (confirmed
-  by inspecting the raw API response directly that it included a live
-  argon2 password hash and an email address), ran `amg inventory --json`
-  and grepped the output and the saved manifest file for the
-  hash/email/phone — zero matches in either. Disabled the user and added
-  a label, snapshotted again, and `amg compare` correctly reported both
-  changes with no PII anywhere in either manifest.
+  version; never `vars`, which routinely hold secrets).
+- Users inventory and comparison: only administrative/verification
+  state (enabled/disabled, verification flags, MFA, labels).
+  `appwrite.User` has no field for password/hash/email/phone/prefs, so
+  `json.Unmarshal` silently drops them from Appwrite's raw response —
+  there's nowhere for that data to decode into.
 - `amg report <result.json>`: renders a saved `compare`/`verify --json`
-  result as text (default), pretty-printed JSON, or a self-contained
-  HTML file — no external stylesheet, script, or network request, safe
-  to open offline. Built on Go's `html/template` (auto-escaping), with a
-  dedicated test proving resource names/messages containing `<script>`
-  tags render as inert escaped text, not executable markup. Every
-  registered `amg` command is now a real implementation — `stub.go` and
-  the "not yet implemented" placeholder are gone.
-  `compare.Result` gained a `SchemaVersion` field (`ResultSchemaVersion`
-  constant) so a future JSON-shape change won't be silently
-  misinterpreted by an older `amg report`.
-  Verified live: piped a real `amg compare --json` result (from a
-  deliberately changed live table) through `amg report --format html`
-  and inspected the output file directly — correct badge, correct
-  findings table, correctly escaped content, zero external references.
-
-### Fixed
-
-- Caught and corrected a real mistake mid-implementation: this stage's
-  first draft of `amg report` was written to `internal/cli/report.go`,
-  silently overwriting the pre-existing `Checklist`/`Status` types that
-  file already held (used by `doctor`/`preflight`) instead of extending
-  them. Caught immediately via a failed build, restored the original
-  file from git, and moved the new command to `report_cmd.go`. No data
-  or history was lost; noted here because it's the kind of mistake that
-  should be visible, not quietly swept under a squashed commit.
-
-- Opt-in TablesDB row content verification (`--sample-rows N` on
-  `inventory`/`snapshot`/`verify`), directly addressing the previously
-  documented "row content comparison: only counts" limitation.
-  `appwrite.Client.SampleRows` fetches up to N rows (capped at 500,
-  ordered by `$id` for determinism) and fingerprints each one — a
-  SHA-256 digest of user-defined column values (every Appwrite-managed
-  field is `$`-prefixed and excluded) plus the row's own `$permissions`
-  — never storing or transmitting row content itself. New comparison
-  rules: `row_content_changed`/`row_permission_changed` (BLOCK, a
-  confirmed difference within the sample) and
+  result as text, JSON, or a self-contained HTML file (Go's
+  `html/template`, auto-escaping — a resource named `<script>...</script>`
+  renders as inert text). `compare.Result` gained `SchemaVersion` so a
+  future JSON-shape change won't be silently misread by an older
+  `amg report`.
+- `.goreleaser.yaml` + `.github/workflows/release.yml`: Linux/macOS/
+  Windows binaries (amd64 + arm64, minus Windows/arm64) on every
+  `vX.Y.Z` tag, version/commit/date injected via `-ldflags`,
+  checksummed, published as a GitHub prerelease.
+- `lab/`: fault-injection migration lab, 8 deterministic scenarios
+  (missing table, missing file, permission change, expected timestamp
+  transformation, transient failure/retry, persistent failure/BLOCK,
+  interrupted run/never-OK at both the `inventory.Collect` and
+  `amg doctor` layers) run through the real client/pagination/retry/
+  collection/comparison stack against `httptest` servers. Runs in CI on
+  every push; CI now also fails on unformatted code (`gofmt -l`).
+- Opt-in TablesDB row content verification (`--sample-rows N`):
+  fingerprints up to N rows (capped at 500, ordered by `$id`) — a
+  SHA-256 digest of user-defined column values plus the row's own
+  `$permissions` — never storing or transmitting row content itself.
+  New rules: `row_content_changed`/`row_permission_changed` (BLOCK),
   `row_sample_missing`/`row_sample_unexpected`/`row_sample_unverified`
-  (WARN — sampling is inherently partial, so absence from a sample is
-  never treated as confirmed loss).
-  Self code-reviewed before landing; fixed two findings: CountRows and
-  SampleRows ran as two full sequential passes over every table instead
-  of one combined pass (roughly doubling wall-clock time), and a
-  row-sampling failure was misreported in the terminal summary as "row
-  counts were not verified" even when counting succeeded fine.
-  Verified live: created a table with two rows, snapshotted with
-  `--sample-rows 10`, edited one row's content, snapshotted again, and
-  `amg compare` correctly reported `row_content_changed` for exactly the
-  changed row — with `$updatedAt` drift on both rows correctly producing
-  no finding.
-- `amg preflight`: pre-migration readiness checks against
-  `AMG_SOURCE_*`/`AMG_DEST_*` — connectivity, authentication, Appwrite
-  version match, and a `Destination conflict` check for resource IDs that
-  already exist on the destination *before* any migration (a collision
-  risk, unlike `verify`'s post-migration "should already match"
-  semantics). Source/destination inventory now runs concurrently (fixed
-  during self-review — it was serial and could starve the second side's
-  timeout budget on a large source project). Also fixed during
-  self-review: an unreachable side was re-dialed a second time for an
-  authentication check it could never pass, producing a duplicate,
-  confusing finding.
-  Verified live: pointed source and destination at the same project with
-  an existing database and confirmed `amg preflight` reported a
-  `Destination conflict` BLOCK naming the exact colliding resource;
-  confirmed bad credentials produce the specific "API key was rejected"
-  reason via a new `explainAuthError` helper shared with `amg doctor`.
-- Added `.gitattributes` forcing LF line endings for Go source — fixes
-  `gofmt -l` spuriously flagging every file as unformatted on Windows
-  checkouts with no actual content difference.
-- Storage inventory: `amg inventory`/`snapshot`/`compare`/`verify` now
-  cover buckets and files, in addition to TablesDB. Files carry their
-  Appwrite-computed MD5 `signature` as `Resource.ContentDigest`, compared
-  via a new `content_changed` rule — file content integrity is verified
-  without amg ever downloading a file. `config_changed` comparison is now
-  type-scoped per resource type (`comparedMetadataKeys`), fixing a latent
-  bug where a bucket's config keys could have been silently checked
-  against unrelated resource types.
-  Verified live: uploaded a file, snapshotted it, replaced its content
-  under the same file ID, snapshotted again, and `amg compare` correctly
-  reported the exact signature change.
+  (WARN — sampling is partial, so absence from a sample is never a
+  confirmed loss).
+- `amg preflight`: pre-migration readiness — connectivity,
+  authentication, Appwrite version match, and a `Destination conflict`
+  check for resource IDs that already exist on the destination before
+  any migration runs.
+- Storage inventory: buckets and files. Files carry their
+  Appwrite-computed MD5 `signature` as `Resource.ContentDigest`,
+  compared via `content_changed` — file content integrity verified
+  without amg ever downloading a file.
 - `internal/manifest`: deterministic on-disk snapshot format
   (`.amg/runs/<run-id>/manifest.json`), no credential field ever.
-- `internal/compare`: offline PASS/WARN/BLOCK comparison engine — 9 rules
-  (`missing_resource`, `unexpected_resource`, `parent_changed`,
-  `name_changed`, `permission_changed`, `config_changed`,
-  `row_count_mismatch`, `row_count_unconfirmed`, `row_count_unverified`),
-  each with its own test. See docs/comparison-model.md.
-- `amg snapshot`: persists an inventory run as a manifest.
-- `amg compare <a> <b>`: fully offline comparison between two manifests —
-  no Appwrite credentials needed at all.
-- `amg verify`: live comparison — inventories `AMG_SOURCE_*` and
-  `AMG_DEST_*` concurrently, then runs the same comparison engine as
-  `compare`. This is the primary "did my migration work" command.
-- `docs/comparison-model.md`: the full rule table.
-- Full loop verified against a live Appwrite Cloud project: snapshot,
-  mutate (permission change, config change, delete a table), snapshot
-  again, `amg compare` correctly reported each change and nothing else;
-  `amg verify` run live against the same project as both sides correctly
-  reported PASS.
-
-- `amg inventory`: real TablesDB inventory (databases, tables, per-table
-  row counts) with `--json`, `--no-row-counts`, `--concurrency` flags.
-  Verified against a live Appwrite Cloud project (server version 2.3.0),
-  not just mocked HTTP.
+- `internal/compare`: offline PASS/WARN/BLOCK comparison engine.
+- `amg snapshot`, `amg compare <a> <b>` (fully offline), `amg verify`
+  (live, both sides concurrently, same comparison engine as `compare`).
+- `amg inventory`: TablesDB inventory (databases, tables, per-table row
+  counts) with `--json`, `--no-row-counts`, `--concurrency`.
 - `internal/inventory`: canonical `Resource`/`Inventory` model,
-  deterministic sorting, bounded-concurrency collector with fail-fast
-  listing and best-effort per-table row counting.
-- `internal/appwrite`: `ListDatabases`/`ListTables`/`CountRows`, a shared
-  cursor-pagination walker with malformed-cursor and cancellation
-  handling, tests for one-page/multi-page/empty-page/stuck-cursor/
-  transient-mid-pagination-failure/cancellation scenarios.
-- `docs/migration-semantics.md`: documented Appwrite behaviors amg's
-  inventory depends on, including the 5,000-row count cap and a real bug
-  found during live testing (see Fixed).
+  deterministic sorting, bounded-concurrency collector.
+- `internal/appwrite`: `ListDatabases`/`ListTables`/`CountRows`, shared
+  cursor-pagination with malformed-cursor and cancellation handling.
+- CLI skeleton (`cmd/amg`): subcommand dispatch, exit codes
+  (0=PASS, 1=WARN, 2=BLOCK). `amg version`, `amg doctor`. Minimal
+  Appwrite REST client: auth headers, bounded retries with backoff,
+  typed error classification. Environment-variable configuration
+  loading, including source/destination pairs and `.env` support.
 
 ### Fixed
 
-- `Client.Version` (`GET /health/version`) no longer sends the API key.
-  Found by testing against a live Appwrite Cloud project: Appwrite
-  evaluates a request carrying `X-Appwrite-Key` under that key's role and
-  rejects "scope: public" endpoints for lacking a `"public"` scope no key
-  can hold — so a public reachability check must never send a key.
+- `TestWrite_DeterministicAsideFromRunIDAndTimestamp` was flaky on
+  Linux: it built two `inventory.Inventory` values via separate
+  `inventory.New()` calls, each stamping its own `GeneratedAt` via
+  `time.Now()`, but only normalized `Manifest.RunID`/`CapturedAt`
+  before comparing — not `Inventory.GeneratedAt`. Passed locally on
+  Windows often enough to miss, failed reliably in CI on Linux.
+- `errs.RetryAfterOf` used `RetryAfter > 0` to detect a server-supplied
+  delay, which treated a legitimate `Retry-After: 0` the same as no
+  header at all. Fixed with an explicit presence flag.
+- The coverage note grouped Storage file content (checked
+  unconditionally) under "checked if enabled" alongside row sampling
+  (genuinely opt-in). Reworded to "Always checked" / "Checked if
+  enabled".
+- `StrictPolicy` only affected `unexpected_resource`, leaving its
+  row-level equivalent `row_sample_unexpected` fixed at WARN. Both now
+  share one `Policy.UnexpectedSeverity` field.
+- Pagination now tracks every resource ID seen across every page, not
+  just each page's last item, so a server that repeats a resource on a
+  later page is refused rather than silently accepted. Proven against a
+  10,001-resource, ~101-page synthetic dataset
+  (`TestListDatabases_LargeDataset_NoPageLossOrDuplication`,
+  `TestListDatabases_DuplicateAcrossPages`).
+- Removed the README's Go Report Card badge — the service was sunset
+  entirely.
+- Two "interrupted run" lab tests deadlocked on cleanup: a channel
+  meant to unblock a stuck HTTP handler was closed by a `defer` that
+  ran after `httptest.Server.Close()`, which itself waits for in-flight
+  handlers to return. Fixed by sleeping past the test's deadline
+  instead of coordinating through a channel.
+- List-valued metadata (a user's `labels`, a bucket's
+  `allowed_file_extensions`) was compared with a literal string
+  comparison, which is order-sensitive; Appwrite doesn't guarantee list
+  ordering. Fixed with an order-independent comparison that also
+  handles the `[]any` shape a list takes after a manifest round-trips
+  through JSON.
+- `CountRows` and row sampling ran as two full sequential passes over
+  every table instead of one combined pass.
+- A row-sampling failure was misreported in the terminal summary as
+  "row counts were not verified" even when counting succeeded.
+- Source/destination inventory in `amg preflight` ran serially instead
+  of concurrently, and an unreachable side was re-dialed a second time
+  for an authentication check it could never pass.
+- Added `.gitattributes` forcing LF line endings for Go source — fixed
+  `gofmt -l` spuriously flagging every file as unformatted on Windows
+  checkouts with no actual content difference.
+- `config_changed` comparison is now scoped per resource type
+  (`comparedMetadataKeys`) — previously a resource's config keys could
+  be checked against another resource type's key list.
+- `Client.Version` (`GET /health/version`) no longer sends the API key:
+  Appwrite evaluates a request carrying `X-Appwrite-Key` under that
+  key's role and rejects `scope: public` endpoints for lacking a
+  `"public"` scope no key can hold.
 - Context cancellation while reading an HTTP response body was
   misclassified as `KindInvalidResponse` instead of `KindTimeout`.
 
-- CLI skeleton (`cmd/amg`) with subcommand dispatch and exit codes
-  (0=PASS, 1=WARN, 2=BLOCK).
-- `amg version` and `amg doctor` (real implementations).
-- `amg inventory`/`preflight`/`snapshot`/`verify`/`report`/`compare`
-  registered as commands but explicitly not yet implemented.
-- Minimal Appwrite REST client (`internal/appwrite`): auth headers,
-  bounded retries with backoff, typed error classification, health/
-  version checks, Appwrite query-string builder.
-- Environment-variable configuration loading (`internal/config`),
-  including source/destination pairs and optional `.env` support.
-- Typed error taxonomy (`internal/errs`).
-- PASS/WARN/BLOCK reporting model (`internal/cli/report.go`).
+### Changed
+
+- Reformatted the README's live-testing section from a dense paragraph
+  into a table, and trimmed repeated self-rebutting phrasing ("but
+  every command is real...") in favor of plain statements with links
+  to the evidence.
+
+### Security
+
+- Confirmed no `internal/appwrite` struct has a field named
+  password/hash/email/phone/prefs/vars/secret/token, `CountRows`
+  discards the row it fetches for counting, and no `%+v`/`%#v`
+  struct-dump formatting exists anywhere that could print an `APIKey`
+  field.
+- `govulncheck` runs in CI on every push (zero direct dependencies, so
+  this mainly checks the standard library).
+- Rewrote SECURITY.md to match the current secret/PII exclusion
+  boundaries per resource type, the HTML report's escaping, and the
+  dependency/supply-chain posture.
+
+### Documentation
+
+- Added CI/pkg.go.dev/License badges to the README.
+- Compressed the top status blurb, moved verification evidence into
+  the Testing section.
+- Added a real screenshot of `amg report --format html`'s output to
+  the README's Example report section.
+- `docs/migration-semantics.md`, `docs/comparison-model.md`: documented
+  Appwrite behaviors amg's inventory and comparison depend on,
+  including the 5,000-row count cap.
+
+Every live-verification claim in this file (created a real resource,
+changed it, confirmed amg's output) was performed against a real
+Appwrite Cloud project during development, not simulated — see
+[docs/assurance-boundary.md](docs/assurance-boundary.md) for how to
+tell a live-verified claim from a source-inference or test-only one
+anywhere else in this repository.
