@@ -161,10 +161,22 @@ A closed set of `Kind` values (`connectivity`, `authentication`,
 Build-time metadata (`Version`/`Commit`/`Date`), set via `-ldflags` at
 release build time; defaults to `"dev"` for local builds.
 
+### `lab`
+
+Not `internal/` — deliberately a top-level, independently discoverable
+package. Eight deterministic fault-injection scenarios (spec section 33,
+`lab_test.go`) exercised through the real `appwrite`/`inventory`/
+`compare`/`cli` stack against `httptest` servers, not mocked internals.
+`WithBackoff` was added to `appwrite.Client`'s options
+(`internal/appwrite/client.go`) specifically so this external package
+could keep retry-scenario tests fast without needing package-private
+access to the `backoff` field the way internal tests already have. Runs
+in CI on every push.
+
 ## What is deliberately not here yet
 
 No inventory (and therefore no comparison) of legacy Databases
 (collections/documents) or Sites, no exhaustive (non-sampled) row
-content comparison, no fault-injection migration lab, no persistent run
-history beyond the manifest/result files a user explicitly saves. These
+content comparison, no persistent run history beyond the manifest/result
+files a user explicitly saves. These
 are staged work — see the README roadmap.
