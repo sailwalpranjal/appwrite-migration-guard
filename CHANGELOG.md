@@ -7,6 +7,33 @@ follows [Keep a Changelog](https://keepachangelog.com/).
 
 ### Added
 
+- Two new `lab/` fault-injection scenarios (H, I) grounded in real,
+  verified Appwrite bugs rather than invented ones — fetched and read in
+  full via `gh api` (not just a title/summary) before being encoded as
+  tests, in response to an audit criticism that the lab's prior 8
+  scenarios were entirely hypothetical. Scenario H
+  (`TestScenarioH_HalfMigratedTableSchema_Blocks`) models
+  appwrite/appwrite#12770 (closed): a self-hosted 1.9.0->1.9.5 upgrade
+  silently dropped two columns from the `functions` table's schema —
+  proves `schema_changed` fires on a table that loses a column between
+  snapshots. Scenario I
+  (`TestScenarioI_ValidationError_SurfacesRealMessage_NotMaskedAsConnectivity`)
+  models appwrite/appwrite#13477 (open): Appwrite's own
+  `Migrations/Appwrite/Report/Get.php` catches a real exception and
+  rethrows a generic connectivity message, masking the actual cause —
+  proves amg's own error classification doesn't compound that by
+  further masking whatever specific message a server does send. A
+  matching unit-level test,
+  `TestHealth_ValidationError_SurfacesRealMessage`, was added to
+  `internal/appwrite/client_test.go`.
+  Self code-reviewed before landing; the review caught a real
+  inaccuracy — the initial description said "Appwrite's own console"
+  discarded the validation message, but re-reading the full issue body
+  (not just its title) showed the masking happens server-side in
+  `Get.php`'s catch-and-rethrow, before the response ever reaches the
+  console. Fixed in all three places the claim appeared (README,
+  client_test.go, lab_test.go) after re-verifying against the issue's
+  own "Root cause analysis" section.
 - HTML report redesign, driven by an independent design review: badges
   now fill with a tinted background instead of outline-only, table rows
   get zebra striping and hover state, a sticky client-side filter/search

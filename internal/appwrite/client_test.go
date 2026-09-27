@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -268,6 +269,38 @@ func TestHealth_ValidationError_NotRetried(t *testing.T) {
 	}
 	if calls != 1 {
 		t.Fatalf("expected 1 call, got %d", calls)
+	}
+}
+
+// TestHealth_ValidationError_SurfacesRealMessage is a regression guard
+// grounded in a real, verified Appwrite bug: appwrite/appwrite#13477
+// ("Self-hosted -> self-hosted migration fails at report stage —
+// Missing required field 'policies' for Appwrite\Models\Database is
+// masked as 'Unable to connect to the migration source'"). There, the
+// masking happened server-side — Appwrite's own
+// Migrations/Appwrite/Report/Get.php caught the real exception (a
+// missing `policies` field) and rethrew a generic connectivity message,
+// so the 400 response a client receives was already masked before it
+// left Appwrite. amg has no way to recover a message Appwrite never
+// sent, but it must not compound the problem: whatever specific message
+// the server *did* send has to survive into amg's own returned error
+// text, not be replaced by a generic "validation failed" or
+// status-code-only string on amg's side.
+func TestHealth_ValidationError_SurfacesRealMessage(t *testing.T) {
+	const specificMessage = `Missing required field "policies" for Appwrite\Models\Database`
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(apiError{Message: specificMessage, Code: 400})
+	}))
+	defer srv.Close()
+
+	c := New(testEnv(srv.URL))
+	_, err := c.Health(context.Background())
+	if err == nil {
+		t.Fatal("expected an error")
+	}
+	if !strings.Contains(err.Error(), specificMessage) {
+		t.Fatalf("expected the server's specific validation message to survive in the error text, got: %v", err)
 	}
 }
 
