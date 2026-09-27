@@ -24,6 +24,8 @@ func storageOnlyServer(t *testing.T, buckets []map[string]any, filesByBucket map
 			bucketID := strings.TrimSuffix(strings.TrimPrefix(r.URL.Path, "/storage/buckets/"), "/files")
 			files := filesByBucket[bucketID]
 			json.NewEncoder(w).Encode(map[string]any{"total": len(files), "files": files})
+		case r.URL.Path == "/users":
+			json.NewEncoder(w).Encode(map[string]any{"total": 0, "users": []any{}})
 		default:
 			w.WriteHeader(http.StatusNotFound)
 		}

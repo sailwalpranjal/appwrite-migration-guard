@@ -52,6 +52,15 @@ type (`comparedMetadataKeys` in `compare.go`), so a bucket's
 | `table` | `enabled`, `row_security` |
 | `bucket` | `enabled`, `file_security`, `maximum_file_size`, `allowed_file_extensions`, `compression`, `encryption`, `antivirus` |
 | `file` | `mime_type` |
+| `user` | `enabled`, `email_verification`, `phone_verification`, `mfa`, `labels` |
+
+List-valued metadata (`allowed_file_extensions`, `labels`) is compared as
+an order-independent set (`equalMetadataValue`), not a literal string —
+Appwrite does not guarantee list ordering, so two semantically identical
+lists returned in a different order must not produce a spurious
+`config_changed` finding. This is checked in both a value's native
+`[]string` form and its `[]any` form after a manifest round-trips through
+JSON, since those decode differently.
 
 ## Deliberately excluded from comparison
 

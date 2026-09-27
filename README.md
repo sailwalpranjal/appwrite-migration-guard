@@ -8,12 +8,14 @@
 > verified against a live Appwrite Cloud project, covering TablesDB
 > (databases/tables/rows, with opt-in sampled row *content* verification
 > via `--sample-rows`), Storage (buckets/files, with file
-> content-integrity checks via MD5 signature), and HTML/JSON/text
-> reporting. Deliberately introduced a permission change, a config
-> change, a deleted table, changed file content, a changed row's
-> content, and a destination resource ID collision, and confirmed amg
-> caught every one of them. What's still missing is *breadth*, not
-> depth: legacy Databases/Users/Functions/Sites aren't inventoried yet
+> content-integrity checks via MD5 signature), Users (administrative
+> state only — see [Limitations](#limitations) for exactly what's
+> excluded and why), and HTML/JSON/text reporting. Deliberately
+> introduced a permission change, a config change, a deleted table,
+> changed file content, a changed row's content, and a destination
+> resource ID collision, and confirmed amg caught every one of them.
+> What's still missing is *breadth*, not depth: legacy Databases
+> (collections/documents)/Functions/Sites aren't inventoried yet
 > (explicitly marked `UNSUPPORTED`, never silently skipped), and there's
 > no fault-injection lab or release binaries yet — see
 > [Roadmap](#roadmap). This README describes what exists today, not the
@@ -257,7 +259,7 @@ go test ./...
 All claims of "supported" or "tested" in this repository are backed by the
 tests in the corresponding package — see `*_test.go` files next to the
 code they test. Beyond mocked-HTTP tests, amg's core loop has been run
-five times against a live Appwrite Cloud project. TablesDB: create a
+six times against a live Appwrite Cloud project. TablesDB: create a
 database + table, snapshot it as "source", change its permissions and a
 config flag, snapshot again as "destination", `amg compare` the two
 manifests (correctly reported both changes and nothing else), delete the
@@ -281,7 +283,14 @@ correctly producing no finding. Reporting: piped a real `amg compare
 --json` result (a permission + config change on a live table) through
 `amg report --format html` and inspected the output file directly — a
 complete, valid HTML document with both findings rendered, auto-escaped,
-and no external resource references. All test resources were deleted
+and no external resource references. Users: created a real user (whose
+raw Appwrite response, confirmed by inspecting it directly, included a
+live argon2 password hash and email address), ran `amg inventory --json`
+and grepped the output for the hash/email/phone — zero matches, confirmed
+absent from both the JSON and the saved manifest file. Disabled the user
+and added a label, snapshotted again, and `amg compare` correctly
+reported both changes (`enabled`, `labels`) with no PII anywhere in
+either manifest. All test resources were deleted
 afterward.
 
 ## Migration lab
@@ -302,9 +311,16 @@ prove amg's comparison engine actually detects real problems — see
   *why* it's there or whether that's actually a problem for your specific
   migration.
 - Inventory (and therefore comparison) covers TablesDB
-  (databases/tables/row counts) and Storage (buckets/files) only. Legacy
-  Databases (collections/documents), Users, Functions, and Sites are
+  (databases/tables/row counts), Storage (buckets/files), and Users.
+  Legacy Databases (collections/documents), Functions, and Sites are
   explicitly marked `UNSUPPORTED`, not silently skipped — see
+  [docs/migration-semantics.md](docs/migration-semantics.md).
+- User inventory is deliberately narrow: only administrative/verification
+  state (enabled/disabled, email/phone verification flags, MFA, labels).
+  amg never collects or compares a user's email, phone number, or prefs
+  (personally identifiable/arbitrary application data), and the API
+  response's password/hash/hashOptions fields are never even decoded —
+  there is no Go struct field for them to land in. See
   [docs/migration-semantics.md](docs/migration-semantics.md).
 - Row content comparison for TablesDB is opt-in and sampled, not
   exhaustive: `--sample-rows N` fingerprints the first N rows per table
@@ -334,7 +350,8 @@ prove amg's comparison engine actually detects real problems — see
 5. ~~Inventory + comparison for Storage (buckets/files, MD5 content
    verification)~~ — done. ~~Opt-in TablesDB row content verification
    (`--sample-rows`, addressing the "counts only" limitation)~~ — done.
-   Still open: legacy Databases, Users, Functions inventory.
+   ~~Users inventory (administrative state only)~~ — done. Still open:
+   legacy Databases (collections/documents), Functions, Sites.
 6. ~~Static HTML reporting (`amg report`)~~ — done, alongside JSON/text.
 7. Fault-injection migration lab + CI.
 8. Cross-platform release binaries.

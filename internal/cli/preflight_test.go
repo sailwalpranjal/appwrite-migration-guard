@@ -29,6 +29,8 @@ func preflightServer(t *testing.T, version string, databaseIDs []string) *httpte
 			json.NewEncoder(w).Encode(map[string]any{"total": len(dbs), "databases": dbs})
 		case "/storage/buckets":
 			json.NewEncoder(w).Encode(map[string]any{"total": 0, "buckets": []any{}})
+		case "/users":
+			json.NewEncoder(w).Encode(map[string]any{"total": 0, "users": []any{}})
 		default:
 			if strings.HasPrefix(r.URL.Path, "/tablesdb/") && strings.HasSuffix(r.URL.Path, "/tables") {
 				json.NewEncoder(w).Encode(map[string]any{"total": 0, "tables": []any{}})

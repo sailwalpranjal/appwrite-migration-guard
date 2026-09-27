@@ -48,9 +48,9 @@ func (o Options) withDefaults() Options {
 // verification is a WARN, not a failure of everything else already
 // collected).
 //
-// Legacy Databases (collections/documents), Users, Functions, and Sites
-// are not yet collected; they are listed in Inventory.Unsupported rather
-// than silently omitted.
+// Legacy Databases (collections/documents), Functions, and Sites are not
+// yet collected; they are listed in Inventory.Unsupported rather than
+// silently omitted.
 func Collect(ctx context.Context, client *appwrite.Client, endpoint, projectID string, opts Options) (*Inventory, error) {
 	opts = opts.withDefaults()
 	inv := New(endpoint, projectID)
@@ -59,6 +59,9 @@ func Collect(ctx context.Context, client *appwrite.Client, endpoint, projectID s
 		return nil, err
 	}
 	if err := collectStorage(ctx, client, inv, opts); err != nil {
+		return nil, err
+	}
+	if err := collectUsers(ctx, client, inv); err != nil {
 		return nil, err
 	}
 
@@ -158,6 +161,37 @@ func collectTablesDB(ctx context.Context, client *appwrite.Client, inv *Inventor
 		})
 	}
 
+	return nil
+}
+
+// collectUsers lists every user in the project. Metadata is
+// deliberately limited to administrative/verification state
+// (enabled/disabled, verification flags, MFA, labels) — email, phone,
+// and prefs are never collected, even though the raw Appwrite response
+// can include them, because they are personally identifiable or
+// arbitrary application data amg has no structural need to read. See
+// docs/migration-semantics.md.
+func collectUsers(ctx context.Context, client *appwrite.Client, inv *Inventory) error {
+	users, err := client.ListUsers(ctx)
+	if err != nil {
+		return fmt.Errorf("list users: %w", err)
+	}
+	for _, u := range users {
+		inv.Resources = append(inv.Resources, Resource{
+			Type:      ResourceUser,
+			ID:        u.ID,
+			Name:      u.Name,
+			CreatedAt: u.CreatedAt,
+			UpdatedAt: u.UpdatedAt,
+			Metadata: map[string]any{
+				"enabled":            u.Status,
+				"email_verification": u.EmailVerification,
+				"phone_verification": u.PhoneVerification,
+				"mfa":                u.MFA,
+				"labels":             u.Labels,
+			},
+		})
+	}
 	return nil
 }
 

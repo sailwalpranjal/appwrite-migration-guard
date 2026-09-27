@@ -182,7 +182,7 @@ func compareMatched(s, d inventory.Resource) []Finding {
 	for _, mk := range comparedMetadataKeys[s.Type] {
 		sv, sok := s.Metadata[mk]
 		dv, dok := d.Metadata[mk]
-		if sok != dok || fmt.Sprint(sv) != fmt.Sprint(dv) {
+		if sok != dok || !equalMetadataValue(sv, dv) {
 			add(SeverityBlock, RuleConfigChanged, fmt.Sprintf("%s %q metadata %q changed: %v -> %v", s.Type, s.ID, mk, sv, dv))
 		}
 	}
@@ -213,6 +213,7 @@ var comparedMetadataKeys = map[inventory.ResourceType][]string{
 	inventory.ResourceTable:    {"enabled", "row_security"},
 	inventory.ResourceBucket:   {"enabled", "file_security", "maximum_file_size", "allowed_file_extensions", "compression", "encryption", "antivirus"},
 	inventory.ResourceFile:     {"mime_type"},
+	inventory.ResourceUser:     {"enabled", "email_verification", "phone_verification", "mfa", "labels"},
 }
 
 func compareRowCounts(s, d inventory.Resource) []Finding {
@@ -317,6 +318,50 @@ func compareRowSamples(s, d inventory.Resource) []Finding {
 	}
 
 	return findings
+}
+
+// equalMetadataValue compares two Resource.Metadata values for a
+// config_changed check. List-valued fields (a table's allowed file
+// extensions, a user's labels, ...) are compared as order-independent
+// sets — Appwrite does not guarantee list ordering, and a manifest
+// round-tripped through JSON turns a Go []string into []any, so both
+// representations are normalized before comparing. Everything else falls
+// back to a plain formatted-string comparison.
+func equalMetadataValue(a, b any) bool {
+	as, aok := toStringSlice(a)
+	bs, bok := toStringSlice(b)
+	if aok && bok {
+		return equalStringSets(as, bs)
+	}
+	if aok != bok {
+		// One side decoded as a list and the other didn't (e.g. one is
+		// nil/absent) — treat as equal only if both are empty.
+		return len(as)+len(bs) == 0 && fmt.Sprint(a) == fmt.Sprint(b)
+	}
+	return fmt.Sprint(a) == fmt.Sprint(b)
+}
+
+// toStringSlice extracts a []string from a Metadata value that is either
+// a native []string (a freshly-collected Resource) or []any of strings
+// (the same value after a JSON manifest round trip). ok is false for any
+// other shape, including nil/absent.
+func toStringSlice(v any) ([]string, bool) {
+	switch x := v.(type) {
+	case []string:
+		return x, true
+	case []any:
+		out := make([]string, len(x))
+		for i, e := range x {
+			s, ok := e.(string)
+			if !ok {
+				return nil, false
+			}
+			out[i] = s
+		}
+		return out, true
+	default:
+		return nil, false
+	}
 }
 
 func equalStringSets(a, b []string) bool {

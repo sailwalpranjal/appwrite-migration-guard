@@ -25,6 +25,8 @@ func rowSampleServer(t *testing.T, rows []map[string]any, rowsErr int) *httptest
 			})
 		case r.URL.Path == "/storage/buckets":
 			json.NewEncoder(w).Encode(map[string]any{"total": 0, "buckets": []any{}})
+		case r.URL.Path == "/users":
+			json.NewEncoder(w).Encode(map[string]any{"total": 0, "users": []any{}})
 		case r.URL.Path == "/tablesdb/db1/tables/t1/rows":
 			if rowsErr != 0 {
 				w.WriteHeader(rowsErr)
@@ -55,6 +57,8 @@ func TestCollect_SampleRowsDisabledByDefault(t *testing.T) {
 			json.NewEncoder(w).Encode(map[string]any{"total": 1, "tables": []map[string]any{{"$id": "t1", "databaseId": "db1", "name": "Widgets"}}})
 		case "/storage/buckets":
 			json.NewEncoder(w).Encode(map[string]any{"total": 0, "buckets": []any{}})
+		case "/users":
+			json.NewEncoder(w).Encode(map[string]any{"total": 0, "users": []any{}})
 		}
 	}))
 	defer srv.Close()

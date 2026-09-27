@@ -78,6 +78,38 @@ path preserves row IDs; if yours doesn't, sampled comparisons will show
 spurious `row_sample_missing`/`row_sample_unexpected` findings rather
 than real content differences.
 
+## Users: what amg deliberately does not collect
+
+Appwrite's User model (`Model/User.php`) can include `password`, `hash`,
+`hashOptions`, `email`, `phone`, and `prefs` fields in its raw JSON
+response, depending on the caller's scope. amg's `appwrite.User` struct
+(`internal/appwrite/users.go`) declares none of these — only `$id`,
+`$createdAt`, `$updatedAt`, `name`, `status`, `labels`,
+`emailVerification`, `phoneVerification`, and `mfa`. Because Go's
+`encoding/json` only populates fields that exist on the target struct,
+any of those excluded fields present in a real response are silently
+discarded during decode — there is no code path that could accidentally
+persist them into a manifest, a comparison result, or a log line.
+
+Two different reasons drive this, for two different groups of fields:
+
+- **`password`/`hash`/`hashOptions`** are credential material. There is
+  no scenario in which a local verification tool should ever read,
+  store, or compare these — this is a hard "never," not a default that
+  could reasonably be turned on.
+- **`email`/`phone`/`prefs`** are personally identifiable or arbitrary
+  application data. amg's comparison only needs *administrative* state
+  (is the account enabled, verified, labeled) to answer "did this user's
+  account state survive the migration correctly" — it does not need the
+  PII itself, so it doesn't collect it, consistent with the project's
+  general default of preferring IDs/metadata over full content (spec
+  section 20).
+
+If a future version needs to compare email/phone (e.g. to detect a
+migration that corrupted contact info), that should be a separate,
+clearly-opt-in capability — the same pattern already used for
+`--sample-rows` — not a default.
+
 ## What is not yet defined
 
 Only one *structural* normalization rule exists ($createdAt/$updatedAt
