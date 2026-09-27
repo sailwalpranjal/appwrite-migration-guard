@@ -20,9 +20,10 @@ const inventoryTimeout = 2 * time.Minute
 // and tables (with, by default, a per-table row count), its Storage
 // buckets and files (including each file's MD5 content signature), and
 // its Users (administrative/verification state only — never email,
-// phone, prefs, or credential material; see docs/migration-semantics.md).
-// It never writes to the Appwrite project and never downloads file
-// content.
+// phone, prefs, or credential material), and its Functions (config only
+// — never environment variables, which routinely hold secrets; see
+// docs/migration-semantics.md). It never writes to the Appwrite project
+// and never downloads file content.
 func RunInventory(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 	fs := flag.NewFlagSet("inventory", flag.ContinueOnError)
 	fs.SetOutput(stderr)
@@ -90,6 +91,7 @@ func writeInventorySummary(w io.Writer, inv *inventory.Inventory) {
 	fmt.Fprintf(w, "%-5s %d bucket(s)\n", StatusPass, counts[inventory.ResourceBucket])
 	fmt.Fprintf(w, "%-5s %d file(s)\n", StatusPass, counts[inventory.ResourceFile])
 	fmt.Fprintf(w, "%-5s %d user(s)\n", StatusPass, counts[inventory.ResourceUser])
+	fmt.Fprintf(w, "%-5s %d function(s)\n", StatusPass, counts[inventory.ResourceFunction])
 	fmt.Fprintln(w)
 
 	for _, r := range inv.Resources {
@@ -121,6 +123,9 @@ func writeInventorySummary(w io.Writer, inv *inventory.Inventory) {
 				status = "enabled"
 			}
 			fmt.Fprintf(w, "user      %-24s %-30s %s\n", r.ID, r.Name, status)
+		case inventory.ResourceFunction:
+			runtime, _ := r.Metadata["runtime"].(string)
+			fmt.Fprintf(w, "function  %-24s %-30s %s\n", r.ID, r.Name, runtime)
 		}
 	}
 

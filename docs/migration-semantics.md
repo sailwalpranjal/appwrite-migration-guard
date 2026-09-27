@@ -110,6 +110,26 @@ migration that corrupted contact info), that should be a separate,
 clearly-opt-in capability — the same pattern already used for
 `--sample-rows` — not a default.
 
+## Functions: `vars` are never collected
+
+Appwrite's Function model (`Model/Func.php`) includes a `vars` field —
+documented as "Function variables" (`MODEL_VARIABLE`, an array) —
+holding the function's environment variables. In practice these
+routinely contain secrets: API keys, database credentials, third-party
+tokens. Verified live: creating a test function and inspecting the raw
+API response directly showed an explicit `"vars":[]` field present in
+the response shape, confirming this isn't a hypothetical concern.
+
+`appwrite.Function` (`internal/appwrite/functions.go`) has no field for
+`vars`, for the same structural reason `appwrite.User` has none for
+`password`/`hash`/`email`: Go's `encoding/json` only populates
+declared fields, so `vars` — however many secrets it might hold — is
+silently dropped during decode. amg's function comparison is
+config-only (runtime, schedule, timeout, execute permissions, logging,
+scopes) and has no way to know, nor does it try to know, whether a
+function's actual *code* or environment behaves the same after a
+migration.
+
 ## What is not yet defined
 
 Only one *structural* normalization rule exists ($createdAt/$updatedAt

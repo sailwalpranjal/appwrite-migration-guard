@@ -7,6 +7,24 @@ follows [Keep a Changelog](https://keepachangelog.com/).
 
 ### Added
 
+- Functions inventory and comparison (config only: runtime, schedule,
+  timeout, execute permissions, logging, scopes, deployment retention,
+  version — never behavior/code). `appwrite.Function` deliberately has
+  no field for `vars` (function environment variables), which routinely
+  hold secrets — same pattern as User's excluded fields.
+  Self code-reviewed before landing; fixed 4 findings: a stale doc
+  comment on `Collect` still claiming Functions were unsupported, two
+  collected-but-never-compared metadata fields
+  (`deployment_retention`/`version` were in `Resource.Metadata` but
+  missing from `comparedMetadataKeys`, so real config drift there would
+  have silently passed), and a stale "not yet" line in
+  docs/comparison-model.md.
+  Verified live against Appwrite Cloud: created a real function (whose
+  raw API response included an explicit `"vars":[]` field, confirming
+  the shape this exclusion is designed against), changed its schedule
+  and execute permissions, and `amg compare` correctly reported both —
+  grepping both manifests for `vars`/secret-shaped content found
+  nothing.
 - Users inventory and comparison. `appwrite.User` deliberately has no
   field for `password`/`hash`/`hashOptions`/`email`/`phone`/`prefs` —
   even though Appwrite's raw response can include all of them — so

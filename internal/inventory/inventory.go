@@ -23,6 +23,7 @@ const (
 	ResourceBucket   ResourceType = "bucket"
 	ResourceFile     ResourceType = "file"
 	ResourceUser     ResourceType = "user"
+	ResourceFunction ResourceType = "function"
 )
 
 // RowCountCap mirrors appwrite.rowCountCap: the point at which Appwrite
@@ -106,7 +107,6 @@ type Inventory struct {
 // always tell a user "I did not check X" instead of staying silent.
 var unsupportedResourceTypes = []string{
 	"legacy_databases_collections_documents",
-	"functions",
 	"sites",
 }
 

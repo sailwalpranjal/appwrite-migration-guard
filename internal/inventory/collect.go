@@ -48,8 +48,8 @@ func (o Options) withDefaults() Options {
 // verification is a WARN, not a failure of everything else already
 // collected).
 //
-// Legacy Databases (collections/documents), Functions, and Sites are not
-// yet collected; they are listed in Inventory.Unsupported rather than
+// Legacy Databases (collections/documents) and Sites are not yet
+// collected; they are listed in Inventory.Unsupported rather than
 // silently omitted.
 func Collect(ctx context.Context, client *appwrite.Client, endpoint, projectID string, opts Options) (*Inventory, error) {
 	opts = opts.withDefaults()
@@ -62,6 +62,9 @@ func Collect(ctx context.Context, client *appwrite.Client, endpoint, projectID s
 		return nil, err
 	}
 	if err := collectUsers(ctx, client, inv); err != nil {
+		return nil, err
+	}
+	if err := collectFunctions(ctx, client, inv); err != nil {
 		return nil, err
 	}
 
@@ -189,6 +192,41 @@ func collectUsers(ctx context.Context, client *appwrite.Client, inv *Inventory) 
 				"phone_verification": u.PhoneVerification,
 				"mfa":                u.MFA,
 				"labels":             u.Labels,
+			},
+		})
+	}
+	return nil
+}
+
+// collectFunctions lists every function in the project. Environment
+// variables ("vars") are never fetched or collected — Appwrite's own
+// model documents them as function environment variables, which
+// routinely hold secrets (API keys, database passwords, tokens). See
+// docs/migration-semantics.md.
+func collectFunctions(ctx context.Context, client *appwrite.Client, inv *Inventory) error {
+	fns, err := client.ListFunctions(ctx)
+	if err != nil {
+		return fmt.Errorf("list functions: %w", err)
+	}
+	for _, f := range fns {
+		inv.Resources = append(inv.Resources, Resource{
+			Type:        ResourceFunction,
+			ID:          f.ID,
+			Name:        f.Name,
+			Permissions: f.Execute,
+			CreatedAt:   f.CreatedAt,
+			UpdatedAt:   f.UpdatedAt,
+			Metadata: map[string]any{
+				"enabled":              f.Enabled,
+				"logging":              f.Logging,
+				"runtime":              f.Runtime,
+				"scopes":               f.Scopes,
+				"events":               f.Events,
+				"schedule":             f.Schedule,
+				"timeout":              f.Timeout,
+				"entrypoint":           f.Entrypoint,
+				"deployment_retention": f.DeploymentRetention,
+				"version":              f.Version,
 			},
 		})
 	}

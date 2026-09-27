@@ -53,6 +53,7 @@ type (`comparedMetadataKeys` in `compare.go`), so a bucket's
 | `bucket` | `enabled`, `file_security`, `maximum_file_size`, `allowed_file_extensions`, `compression`, `encryption`, `antivirus` |
 | `file` | `mime_type` |
 | `user` | `enabled`, `email_verification`, `phone_verification`, `mfa`, `labels` |
+| `function` | `enabled`, `logging`, `runtime`, `scopes`, `events`, `schedule`, `timeout`, `entrypoint`, `deployment_retention`, `version` |
 
 List-valued metadata (`allowed_file_extensions`, `labels`) is compared as
 an order-independent set (`equalMetadataValue`), not a literal string —
@@ -109,7 +110,9 @@ ID-matched comparison in this document already makes.
 
 ## What this does not do yet
 
-No comparison for legacy Databases/Users/Functions/Sites (they aren't
-inventoried yet — see `Inventory.Unsupported`), no persisted run-to-run
-history beyond the manifest files themselves, no exhaustive (non-sampled)
-row content verification.
+No comparison for legacy Databases (collections/documents) or Sites
+(they aren't inventoried yet — see `Inventory.Unsupported`), no
+comparison of function *behavior* (only config: schedule, runtime,
+execute permissions, etc. — not what a function's code actually does),
+no persisted run-to-run history beyond the manifest files themselves, no
+exhaustive (non-sampled) row content verification.
