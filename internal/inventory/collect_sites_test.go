@@ -8,7 +8,7 @@ import (
 	"testing"
 )
 
-func usersOnlyServer(t *testing.T, users []map[string]any) *httptest.Server {
+func sitesOnlyServer(t *testing.T, sites []map[string]any) *httptest.Server {
 	t.Helper()
 	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
@@ -17,20 +17,20 @@ func usersOnlyServer(t *testing.T, users []map[string]any) *httptest.Server {
 		case "/storage/buckets":
 			json.NewEncoder(w).Encode(map[string]any{"total": 0, "buckets": []any{}})
 		case "/users":
-			json.NewEncoder(w).Encode(map[string]any{"total": len(users), "users": users})
+			json.NewEncoder(w).Encode(map[string]any{"total": 0, "users": []any{}})
 		case "/functions":
 			json.NewEncoder(w).Encode(map[string]any{"total": 0, "functions": []any{}})
 		case "/sites":
-			json.NewEncoder(w).Encode(map[string]any{"total": 0, "sites": []any{}})
+			json.NewEncoder(w).Encode(map[string]any{"total": len(sites), "sites": sites})
 		default:
 			w.WriteHeader(http.StatusNotFound)
 		}
 	}))
 }
 
-func TestCollect_UsersPopulated(t *testing.T) {
-	srv := usersOnlyServer(t, []map[string]any{
-		{"$id": "u1", "name": "Alice", "status": true, "emailVerification": true, "labels": []string{"vip"}},
+func TestCollect_SitesPopulated(t *testing.T) {
+	srv := sitesOnlyServer(t, []map[string]any{
+		{"$id": "site1", "name": "Marketing", "enabled": true, "framework": "nextjs"},
 	})
 	defer srv.Close()
 
@@ -40,40 +40,24 @@ func TestCollect_UsersPopulated(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	var user *Resource
+	var s *Resource
 	for i := range inv.Resources {
-		if inv.Resources[i].Type == ResourceUser {
-			user = &inv.Resources[i]
+		if inv.Resources[i].Type == ResourceSite {
+			s = &inv.Resources[i]
 		}
 	}
-	if user == nil {
-		t.Fatal("expected a user resource")
+	if s == nil {
+		t.Fatal("expected a site resource")
 	}
-	if user.Name != "Alice" {
-		t.Fatalf("unexpected name: %q", user.Name)
+	if s.Name != "Marketing" {
+		t.Fatalf("unexpected name: %q", s.Name)
 	}
-	if user.Metadata["enabled"] != true {
-		t.Fatalf("unexpected enabled: %v", user.Metadata["enabled"])
+	if s.Metadata["framework"] != "nextjs" {
+		t.Fatalf("unexpected framework: %v", s.Metadata["framework"])
 	}
 }
 
-func TestCollect_UsersIsNoLongerUnsupported(t *testing.T) {
-	srv := usersOnlyServer(t, nil)
-	defer srv.Close()
-
-	client := newTestClient(srv.URL)
-	inv, err := Collect(context.Background(), client, srv.URL, "proj1", Options{})
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	for _, u := range inv.Unsupported {
-		if u == "users" {
-			t.Fatal("users should no longer be listed as unsupported")
-		}
-	}
-}
-
-func TestCollect_ListUsersFailureAborts(t *testing.T) {
+func TestCollect_ListSitesFailureAborts(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case "/tablesdb":
@@ -81,6 +65,10 @@ func TestCollect_ListUsersFailureAborts(t *testing.T) {
 		case "/storage/buckets":
 			json.NewEncoder(w).Encode(map[string]any{"total": 0, "buckets": []any{}})
 		case "/users":
+			json.NewEncoder(w).Encode(map[string]any{"total": 0, "users": []any{}})
+		case "/functions":
+			json.NewEncoder(w).Encode(map[string]any{"total": 0, "functions": []any{}})
+		case "/sites":
 			w.WriteHeader(http.StatusForbidden)
 			json.NewEncoder(w).Encode(map[string]any{"message": "forbidden", "code": 403})
 		}
@@ -90,6 +78,6 @@ func TestCollect_ListUsersFailureAborts(t *testing.T) {
 	client := newTestClient(srv.URL)
 	_, err := Collect(context.Background(), client, srv.URL, "proj1", Options{})
 	if err == nil {
-		t.Fatal("expected an error when ListUsers fails")
+		t.Fatal("expected an error when ListSites fails")
 	}
 }

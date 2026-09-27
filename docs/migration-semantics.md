@@ -11,13 +11,37 @@ Appwrite 2.x's current database API is **TablesDB** (`/v1/tablesdb/...`,
 tables/rows). An older **Databases** API (`/v1/databases/...`,
 collections/documents) still exists in the server source
 (`src/Appwrite/Platform/Modules/Databases/Http/Databases/`) for backward
-compatibility. amg's inventory currently covers TablesDB only; the legacy
-API is listed under `Inventory.Unsupported` as
-`legacy_databases_collections_documents` rather than silently skipped.
+compatibility, marked `Deprecated(since: '1.8.0')` in Appwrite's own SDK
+metadata.
 
-If your project still uses the legacy collections/documents API, `amg
-inventory` will currently under-report your resources — this is a known
-gap, not a silent failure (the JSON output always names it explicitly).
+**amg does not need a separate collector for the legacy API** — it
+reads the identical underlying data through TablesDB's endpoints.
+Verified two ways:
+
+- **Live, at the database level**: created a database via
+  `POST /v1/tablesdb`, then fetched it via `GET /v1/databases` (the
+  legacy list endpoint) — the response was byte-for-byte identical to
+  `GET /v1/tablesdb`, same `$id`, same every field.
+- **By source, at the table/collection level**: `GET
+  /v1/tablesdb/:id/tables` and `GET /v1/databases/:id/collections` both
+  call `$dbForProject->find('database_{sequence}', ...)` in the server
+  source — the identical internal storage. amg has not reproduced this
+  specific layer live: the API key used for the database-level test
+  lacked the legacy `collections.read` scope, which is a **separate**
+  grantable scope from `tables.read` even though both read the same
+  data (confirmed live: a `databases.read`/`tables.read`-scoped key got
+  a `401 general_unauthorized_scope` from `GET
+  /v1/databases/:id/collections` specifically). If you find a case where
+  this equivalence doesn't hold, please open an issue — this claim rests
+  partly on source-code inference, not two matching live payloads at
+  every level.
+
+Practical implication: amg only ever needs `databases.read`/
+`tables.read`/`rows.read` scopes on your API key — never the legacy
+`collections.read`/`documents.read` scopes — to inventory this resource
+type completely, on either a project that only ever used TablesDB or one
+that still has data created through the legacy collections/documents
+API.
 
 ## Row counts are capped at 5,000
 

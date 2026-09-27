@@ -24,6 +24,7 @@ const (
 	ResourceFile     ResourceType = "file"
 	ResourceUser     ResourceType = "user"
 	ResourceFunction ResourceType = "function"
+	ResourceSite     ResourceType = "site"
 )
 
 // RowCountCap mirrors appwrite.rowCountCap: the point at which Appwrite
@@ -105,10 +106,25 @@ type Inventory struct {
 // unsupportedResourceTypes are Appwrite resource categories amg does not
 // yet inventory. Keeping this list explicit means `amg inventory` can
 // always tell a user "I did not check X" instead of staying silent.
-var unsupportedResourceTypes = []string{
-	"legacy_databases_collections_documents",
-	"sites",
-}
+//
+// Empty as of this stage: every resource type from the original spec
+// (databases/tables, storage, users, functions, sites) is now covered.
+// Legacy "Databases" (collections/documents) never actually needed a
+// separate entry here. At the database level this is confirmed live,
+// not just by reading source: creating a database via POST /v1/tablesdb
+// and then fetching it via GET /v1/databases (the legacy endpoint)
+// returned a byte-for-byte identical response. At the table/collection
+// level, amg has NOT reproduced the same live proof — the API key used
+// for that test lacked the legacy `collections.read` scope (distinct
+// from `tables.read`, even though both read the same data) — so that
+// layer rests on source-code evidence only: both
+// GET /v1/tablesdb/:id/tables and GET /v1/databases/:id/collections
+// query the identical `database_{sequence}` store
+// (github.com/appwrite/appwrite tag 2.3.0), and the legacy path is
+// marked `Deprecated(since: '1.8.0')` in Appwrite's own SDK metadata.
+// See docs/migration-semantics.md for the full account, including this
+// caveat.
+var unsupportedResourceTypes = []string{}
 
 // New creates an empty Inventory stamped with the current tool version
 // and generation time.

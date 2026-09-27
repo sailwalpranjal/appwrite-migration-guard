@@ -38,19 +38,21 @@ func (o Options) withDefaults() Options {
 	return o
 }
 
-// Collect inventories every TablesDB database/table and every Storage
-// bucket/file in the project client is configured for, plus (optionally)
-// a row count per table. It returns an error (and no partial Inventory)
-// if it cannot enumerate databases, tables, buckets, or files at all —
-// those are hard requirements for the inventory to mean anything. Row
-// count failures for individual tables are recorded on that Resource
-// instead of aborting the whole run (spec section 21: partial
+// Collect inventories every TablesDB database/table, Storage bucket/
+// file, User, Function, and Site in the project client is configured
+// for, plus (optionally) a row count per table. It returns an error
+// (and no partial Inventory) if it cannot enumerate a resource type at
+// all — that's a hard requirement for the inventory to mean anything.
+// Row count failures for individual tables are recorded on that
+// Resource instead of aborting the whole run (spec section 21: partial
 // verification is a WARN, not a failure of everything else already
 // collected).
 //
-// Legacy Databases (collections/documents) and Sites are not yet
-// collected; they are listed in Inventory.Unsupported rather than
-// silently omitted.
+// Legacy Databases (collections/documents) need no separate collection
+// step: verified against Appwrite's own server source that they query
+// the identical underlying storage TablesDB does — see
+// docs/migration-semantics.md and the doc comment on
+// unsupportedResourceTypes in inventory.go.
 func Collect(ctx context.Context, client *appwrite.Client, endpoint, projectID string, opts Options) (*Inventory, error) {
 	opts = opts.withDefaults()
 	inv := New(endpoint, projectID)
@@ -65,6 +67,9 @@ func Collect(ctx context.Context, client *appwrite.Client, endpoint, projectID s
 		return nil, err
 	}
 	if err := collectFunctions(ctx, client, inv); err != nil {
+		return nil, err
+	}
+	if err := collectSites(ctx, client, inv); err != nil {
 		return nil, err
 	}
 
@@ -227,6 +232,43 @@ func collectFunctions(ctx context.Context, client *appwrite.Client, inv *Invento
 				"entrypoint":           f.Entrypoint,
 				"deployment_retention": f.DeploymentRetention,
 				"version":              f.Version,
+			},
+		})
+	}
+	return nil
+}
+
+// collectSites lists every site in the project. Environment variables
+// ("vars") are never fetched or collected, for the same reason as
+// Functions: they routinely hold build-time secrets. Sites have no
+// $permissions/execute field in Appwrite's model at all (they're
+// typically public-facing), so Resource.Permissions is left empty.
+func collectSites(ctx context.Context, client *appwrite.Client, inv *Inventory) error {
+	sites, err := client.ListSites(ctx)
+	if err != nil {
+		return fmt.Errorf("list sites: %w", err)
+	}
+	for _, s := range sites {
+		inv.Resources = append(inv.Resources, Resource{
+			Type:      ResourceSite,
+			ID:        s.ID,
+			Name:      s.Name,
+			CreatedAt: s.CreatedAt,
+			UpdatedAt: s.UpdatedAt,
+			Metadata: map[string]any{
+				"enabled":              s.Enabled,
+				"logging":              s.Logging,
+				"framework":            s.Framework,
+				"scopes":               s.Scopes,
+				"timeout":              s.Timeout,
+				"install_command":      s.InstallCommand,
+				"build_command":        s.BuildCommand,
+				"start_command":        s.StartCommand,
+				"output_directory":     s.OutputDirectory,
+				"build_runtime":        s.BuildRuntime,
+				"adapter":              s.Adapter,
+				"fallback_file":        s.FallbackFile,
+				"deployment_retention": s.DeploymentRetention,
 			},
 		})
 	}

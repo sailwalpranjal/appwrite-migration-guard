@@ -5,6 +5,29 @@ follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+### Added
+
+- Sites inventory and comparison (config only: framework, build/install/
+  start commands, output directory, timeout, etc. — never `vars`, for
+  the same env-var-secrets reason as Functions).
+- A real finding, not a feature: legacy Databases (collections/documents)
+  never needed a separate collector. Verified live that `POST
+  /v1/tablesdb` + `GET /v1/databases` (the legacy list endpoint) return
+  byte-for-byte identical data for the same resource, and by source
+  that the table/collection layer queries the identical internal
+  storage (`$dbForProject->find('database_{sequence}', ...)` in both
+  endpoints' controllers) — the legacy API is marked
+  `Deprecated(since: '1.8.0')` in Appwrite's own SDK metadata.
+  `Inventory.Unsupported` is now genuinely empty: every resource type
+  from the original spec is inventoried.
+  Self code-reviewed before landing; the review correctly flagged that
+  the legacy-Databases claim wasn't backed by a live test and that
+  README/architecture.md/migration-semantics.md were left stale — fixed
+  by adding the live database-level verification above (documenting the
+  one part, table/collection-level, that rests on source-code evidence
+  only because the test API key lacked the legacy `collections.read`
+  scope) and updating all three docs.
+
 ### Security
 
 - Ran a manual audit of every `internal/appwrite` struct's JSON tags

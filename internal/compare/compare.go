@@ -215,6 +215,7 @@ var comparedMetadataKeys = map[inventory.ResourceType][]string{
 	inventory.ResourceFile:     {"mime_type"},
 	inventory.ResourceUser:     {"enabled", "email_verification", "phone_verification", "mfa", "labels"},
 	inventory.ResourceFunction: {"enabled", "logging", "runtime", "scopes", "events", "schedule", "timeout", "entrypoint", "deployment_retention", "version"},
+	inventory.ResourceSite:     {"enabled", "logging", "framework", "scopes", "timeout", "install_command", "build_command", "start_command", "output_directory", "build_runtime", "adapter", "fallback_file", "deployment_retention"},
 }
 
 func compareRowCounts(s, d inventory.Resource) []Finding {

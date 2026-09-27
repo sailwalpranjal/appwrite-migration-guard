@@ -49,6 +49,8 @@ func fakeServer(t *testing.T, onRowCount func(databaseID, tableID string) (int, 
 			json.NewEncoder(w).Encode(map[string]any{"total": 0, "users": []any{}})
 		case r.URL.Path == "/functions":
 			json.NewEncoder(w).Encode(map[string]any{"total": 0, "functions": []any{}})
+		case r.URL.Path == "/sites":
+			json.NewEncoder(w).Encode(map[string]any{"total": 0, "sites": []any{}})
 		case strings.HasSuffix(r.URL.Path, "/rows"):
 			parts := strings.Split(r.URL.Path, "/")
 			// /tablesdb/{db}/tables/{table}/rows
@@ -184,7 +186,13 @@ func TestCollect_ListDatabasesFailureAborts(t *testing.T) {
 	}
 }
 
-func TestCollect_UnsupportedResourcesAreExplicit(t *testing.T) {
+// TestCollect_UnsupportedIsEmptyAndExplicit documents the current state
+// (every original-spec resource type — databases/tables, storage,
+// users, functions, sites — is now inventoried) while still asserting
+// Unsupported serializes as a real empty array ([]), never null: a
+// consumer of the JSON output should never need to distinguish "field
+// present but empty" from "field omitted" for this list.
+func TestCollect_UnsupportedIsEmptyAndExplicit(t *testing.T) {
 	srv := fakeServer(t, func(string, string) (int, int) { return 0, 0 })
 	defer srv.Close()
 
@@ -193,8 +201,18 @@ func TestCollect_UnsupportedResourcesAreExplicit(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if len(inv.Unsupported) == 0 {
-		t.Fatal("expected Unsupported to list resource types amg does not collect yet")
+	if inv.Unsupported == nil {
+		t.Fatal("expected Unsupported to be a non-nil (empty) slice, not nil")
+	}
+	if len(inv.Unsupported) != 0 {
+		t.Fatalf("expected Unsupported to be empty, got %v", inv.Unsupported)
+	}
+	b, err := json.Marshal(inv)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	if !strings.Contains(string(b), `"unsupported":[]`) {
+		t.Fatalf(`expected "unsupported":[] in JSON output, got: %s`, b)
 	}
 }
 

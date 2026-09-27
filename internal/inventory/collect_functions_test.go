@@ -20,6 +20,8 @@ func functionsOnlyServer(t *testing.T, fns []map[string]any) *httptest.Server {
 			json.NewEncoder(w).Encode(map[string]any{"total": 0, "users": []any{}})
 		case "/functions":
 			json.NewEncoder(w).Encode(map[string]any{"total": len(fns), "functions": fns})
+		case "/sites":
+			json.NewEncoder(w).Encode(map[string]any{"total": 0, "sites": []any{}})
 		default:
 			w.WriteHeader(http.StatusNotFound)
 		}

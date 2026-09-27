@@ -75,6 +75,10 @@ A narrow REST client, not a general SDK:
   for `vars` (function environment variables, which routinely hold
   secrets), so they are never decoded regardless of what the raw
   response contains.
+- `sites.go` — `ListSites`. Same pattern again: `Site` has no field for
+  `vars`. Unlike Function/Table/Bucket, Appwrite's Site model has no
+  `$permissions`/`execute` field at all (sites are typically
+  public-facing), so `Resource.Permissions` is left empty for this type.
 
 Every endpoint path and header this package uses is annotated with the
 exact file in `github.com/appwrite/appwrite` (tag `2.3.0`) it was verified
@@ -189,8 +193,10 @@ executed.
 
 ## What is deliberately not here yet
 
-No inventory (and therefore no comparison) of legacy Databases
-(collections/documents) or Sites, no exhaustive (non-sampled) row
-content comparison, no persistent run history beyond the manifest/result
-files a user explicitly saves. These
-are staged work — see the README roadmap.
+No exhaustive (non-sampled) row content comparison, no persistent run
+history beyond the manifest/result files a user explicitly saves, no
+comparison of function/site *behavior* (config only). Every
+original-spec resource type is now inventoried — see
+docs/migration-semantics.md for why legacy Databases
+(collections/documents) needed no separate collector. These are staged
+work — see the README roadmap.
