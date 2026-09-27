@@ -13,10 +13,18 @@ func inv(resources ...inventory.Resource) *inventory.Inventory {
 	return i
 }
 
+// defaultSchemaDigest is a fixed, non-empty stand-in for a real
+// appwrite.Table's computed schema digest. Real inventory.Collect always
+// populates SchemaDigest for tables (unlike the opt-in RowSamples), so
+// two "identical" test tables should share this same value unless a test
+// is specifically exercising schema-change/schema-unverified behavior.
+const defaultSchemaDigest = "test-schema-digest"
+
 func table(id, dbID, name string, perms []string, meta map[string]any, rowCount int) inventory.Resource {
 	return inventory.Resource{
 		Type: inventory.ResourceTable, ID: id, ParentID: dbID, Name: name,
 		Permissions: perms, Metadata: meta, RowCount: rowCount,
+		SchemaDigest: defaultSchemaDigest,
 	}
 }
 
@@ -111,8 +119,8 @@ func TestCompare_ParentChanged_Blocks(t *testing.T) {
 // $createdAt/$updatedAt differ structurally between independently
 // created resources and are never compared.
 func TestCompare_TimestampsNeverCompared(t *testing.T) {
-	src := inventory.Resource{Type: inventory.ResourceTable, ID: "t1", ParentID: "db1", Name: "Widgets", CreatedAt: "2020-01-01T00:00:00Z", UpdatedAt: "2020-01-01T00:00:00Z"}
-	dst := inventory.Resource{Type: inventory.ResourceTable, ID: "t1", ParentID: "db1", Name: "Widgets", CreatedAt: "2026-09-27T00:00:00Z", UpdatedAt: "2026-09-27T00:00:00Z"}
+	src := inventory.Resource{Type: inventory.ResourceTable, ID: "t1", ParentID: "db1", Name: "Widgets", CreatedAt: "2020-01-01T00:00:00Z", UpdatedAt: "2020-01-01T00:00:00Z", SchemaDigest: defaultSchemaDigest}
+	dst := inventory.Resource{Type: inventory.ResourceTable, ID: "t1", ParentID: "db1", Name: "Widgets", CreatedAt: "2026-09-27T00:00:00Z", UpdatedAt: "2026-09-27T00:00:00Z", SchemaDigest: defaultSchemaDigest}
 
 	res := Compare("source", inv(src), "dest", inv(dst))
 	if res.Overall() != SeverityPass {
@@ -120,6 +128,57 @@ func TestCompare_TimestampsNeverCompared(t *testing.T) {
 	}
 	if len(res.Findings) != 0 {
 		t.Fatalf("expected zero findings, got %+v", res.Findings)
+	}
+}
+
+// Directly addresses an external audit's core P0 finding: table
+// comparison originally checked only enabled/row_security metadata, not
+// the actual column/index schema — so "email required varchar(255)" ->
+// "email optional varchar(20)" could pass undetected. schema_changed
+// catches this via a content digest over columns+indexes (see
+// appwrite.schemaDigest), the same digest-not-enumerate pattern already
+// proven for row sampling.
+func TestCompare_SchemaChanged_Blocks(t *testing.T) {
+	src := table("t1", "db1", "Widgets", nil, nil, 0)
+	src.SchemaDigest = "digest-with-required-email-varchar255"
+	dst := table("t1", "db1", "Widgets", nil, nil, 0)
+	dst.SchemaDigest = "digest-with-optional-email-varchar20"
+
+	res := Compare("source", inv(src), "dest", inv(dst))
+	if res.Overall() != SeverityBlock {
+		t.Fatalf("expected BLOCK, got %s (%+v)", res.Overall(), res.Findings)
+	}
+	if findRule(res.Findings, RuleSchemaChanged) == nil {
+		t.Fatal("expected a schema_changed finding")
+	}
+}
+
+func TestCompare_SchemaIdentical_Pass(t *testing.T) {
+	src := table("t1", "db1", "Widgets", nil, nil, 0)
+	dst := table("t1", "db1", "Widgets", nil, nil, 0)
+	// Both use defaultSchemaDigest via the table() helper.
+
+	res := Compare("source", inv(src), "dest", inv(dst))
+	if res.Overall() != SeverityPass {
+		t.Fatalf("expected PASS, got %s (%+v)", res.Overall(), res.Findings)
+	}
+}
+
+func TestCompare_SchemaDigestMissing_Warns(t *testing.T) {
+	src := table("t1", "db1", "Widgets", nil, nil, 0)
+	src.SchemaDigest = ""
+	dst := table("t1", "db1", "Widgets", nil, nil, 0)
+
+	res := Compare("source", inv(src), "dest", inv(dst))
+	if res.Overall() != SeverityWarn {
+		t.Fatalf("expected WARN, got %s (%+v)", res.Overall(), res.Findings)
+	}
+	if findRule(res.Findings, RuleSchemaUnverified) == nil {
+		t.Fatal("expected a schema_unverified finding")
+	}
+	// Must never also silently claim a confirmed match.
+	if findRule(res.Findings, RuleSchemaChanged) != nil {
+		t.Fatal("must not report schema_changed when one side's digest is unknown")
 	}
 }
 

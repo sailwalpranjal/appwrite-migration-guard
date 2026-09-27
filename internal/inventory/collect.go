@@ -111,18 +111,21 @@ func collectTablesDB(ctx context.Context, client *appwrite.Client, inv *Inventor
 		})
 		for _, tbl := range tablesByDB[i] {
 			inv.Resources = append(inv.Resources, Resource{
-				Type:        ResourceTable,
-				ID:          tbl.ID,
-				ParentID:    db.ID,
-				Name:        tbl.Name,
-				Permissions: tbl.Permissions,
-				CreatedAt:   tbl.CreatedAt,
-				UpdatedAt:   tbl.UpdatedAt,
+				Type:         ResourceTable,
+				ID:           tbl.ID,
+				ParentID:     db.ID,
+				Name:         tbl.Name,
+				Permissions:  tbl.Permissions,
+				CreatedAt:    tbl.CreatedAt,
+				UpdatedAt:    tbl.UpdatedAt,
+				SchemaDigest: tbl.SchemaDigest,
 				Metadata: map[string]any{
 					"enabled":      tbl.Enabled,
 					"row_security": tbl.RowSecurity,
 					"bytes_max":    tbl.BytesMax,
 					"bytes_used":   tbl.BytesUsed,
+					"column_count": tbl.ColumnCount,
+					"index_count":  tbl.IndexCount,
 				},
 			})
 		}

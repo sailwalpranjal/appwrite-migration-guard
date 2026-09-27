@@ -94,5 +94,15 @@ func Read(path string) (*Manifest, error) {
 	if err := json.Unmarshal(b, &m); err != nil {
 		return nil, errs.New(errs.KindInvalidResponse, "manifest.Read", fmt.Errorf("decode %q: %w", path, err))
 	}
+	// Fail closed on a manifest from a newer amg: a schema version this
+	// build doesn't recognize could carry fields (or reinterpreted
+	// meanings of existing fields) it cannot know about, and silently
+	// proceeding risks comparing on a wrong assumption rather than
+	// refusing outright. Spec principle: prefer a loud failure over a
+	// guess that could produce false confidence.
+	if m.SchemaVersion > SchemaVersion {
+		return nil, errs.New(errs.KindInvalidResponse, "manifest.Read",
+			fmt.Errorf("%q has schema_version %d, newer than this build supports (%d) — upgrade amg before reading it", path, m.SchemaVersion, SchemaVersion))
+	}
 	return &m, nil
 }

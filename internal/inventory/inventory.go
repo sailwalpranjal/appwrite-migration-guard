@@ -68,6 +68,13 @@ type Resource struct {
 	// changed file content without ever transferring file bytes.
 	ContentDigest string `json:"content_digest,omitempty"`
 
+	// SchemaDigest is a content hash over a ResourceTable's columns and
+	// indexes (see appwrite.Table's doc comment for exactly what's
+	// canonicalized and why). Comparing this catches column/index drift
+	// — type, size, required-ness, enum values, index definition —
+	// always populated for tables, unlike RowSamples which is opt-in.
+	SchemaDigest string `json:"schema_digest,omitempty"`
+
 	// RowSamples holds a bounded, deterministic sample of row content
 	// fingerprints for a ResourceTable — populated only when sampling is
 	// enabled (see Options.SampleRows). This is a best-effort integrity

@@ -63,6 +63,27 @@ func TestRunCompare_MissingArgs(t *testing.T) {
 	}
 }
 
+func TestRunCompare_NewerSchemaVersionManifest_Blocks(t *testing.T) {
+	dir := t.TempDir()
+	inv := inventory.New("https://example.com/v1", "proj1")
+	m, err := manifest.New("source", inv)
+	if err != nil {
+		t.Fatalf("manifest.New: %v", err)
+	}
+	m.SchemaVersion = manifest.SchemaVersion + 1
+	futurePath := filepath.Join(dir, "future.json")
+	if err := manifest.Write(futurePath, m); err != nil {
+		t.Fatalf("manifest.Write: %v", err)
+	}
+	b := writeTestManifest(t, dir, "dest")
+
+	var stdout, stderr bytes.Buffer
+	code := RunCompare(context.Background(), []string{futurePath, b}, &stdout, &stderr)
+	if code != ExitBlock {
+		t.Fatalf("expected ExitBlock reading a from-the-future manifest, got %d; stderr:\n%s", code, stderr.String())
+	}
+}
+
 func TestRunCompare_NonexistentManifest(t *testing.T) {
 	dir := t.TempDir()
 	a := writeTestManifest(t, dir, "source")

@@ -7,7 +7,7 @@ import (
 )
 
 func tableWithSamples(id string, samples []inventory.RowSample) inventory.Resource {
-	return inventory.Resource{Type: inventory.ResourceTable, ID: id, ParentID: "db1", Name: "Widgets", RowSamples: samples}
+	return inventory.Resource{Type: inventory.ResourceTable, ID: id, ParentID: "db1", Name: "Widgets", RowSamples: samples, SchemaDigest: defaultSchemaDigest}
 }
 
 func TestCompare_RowContentChanged_Blocks(t *testing.T) {

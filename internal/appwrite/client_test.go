@@ -100,6 +100,108 @@ func TestHealth_Unauthorized_NotRetried(t *testing.T) {
 	}
 }
 
+// TestHealth_RateLimit_RespectsServerRetryAfter is a regression test for
+// a real bug: Retry-After was parsed into the error *message* but never
+// actually used to time the next retry attempt, which always used amg's
+// own exponential backoff regardless of what the server asked for. This
+// proves the client now waits at least the server-specified delay before
+// retrying a 429, not just amg's own (much shorter, in this test) guess.
+func TestHealth_RateLimit_RespectsServerRetryAfter(t *testing.T) {
+	calls := 0
+	var firstCallAt, secondCallAt time.Time
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		calls++
+		if calls == 1 {
+			firstCallAt = time.Now()
+			w.Header().Set("Retry-After", "1") // 1 real second
+			w.WriteHeader(http.StatusTooManyRequests)
+			json.NewEncoder(w).Encode(apiError{Message: "rate limited", Code: 429})
+			return
+		}
+		secondCallAt = time.Now()
+		json.NewEncoder(w).Encode(HealthStatus{Name: "http", Status: "pass"})
+	}))
+	defer srv.Close()
+
+	// A backoff far shorter than the server's Retry-After: if the client
+	// used its own backoff instead of honoring the header, the second
+	// call would arrive almost immediately.
+	c := New(testEnv(srv.URL), WithMaxRetries(2), WithBackoff(time.Millisecond))
+	_, err := c.Health(context.Background())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if calls != 2 {
+		t.Fatalf("expected 2 calls, got %d", calls)
+	}
+	gap := secondCallAt.Sub(firstCallAt)
+	if gap < 900*time.Millisecond {
+		t.Fatalf("expected the client to wait ~1s per Retry-After before retrying, only waited %v", gap)
+	}
+}
+
+// TestHealth_RateLimit_RetryAfterZero_RetriesImmediately is a regression
+// test for a bug caught in self-review: errs.RetryAfterOf used
+// `e.RetryAfter > 0` to decide whether a server-suggested delay was
+// present, which silently treated a genuine "Retry-After: 0" the same as
+// "no header at all" and fell back to amg's own (here, much longer)
+// backoff. A server sending Retry-After: 0 is asking for an immediate
+// retry, so the client should not wait out its configured backoff first.
+func TestHealth_RateLimit_RetryAfterZero_RetriesImmediately(t *testing.T) {
+	calls := 0
+	var firstCallAt, secondCallAt time.Time
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		calls++
+		if calls == 1 {
+			firstCallAt = time.Now()
+			w.Header().Set("Retry-After", "0")
+			w.WriteHeader(http.StatusTooManyRequests)
+			json.NewEncoder(w).Encode(apiError{Message: "rate limited", Code: 429})
+			return
+		}
+		secondCallAt = time.Now()
+		json.NewEncoder(w).Encode(HealthStatus{Name: "http", Status: "pass"})
+	}))
+	defer srv.Close()
+
+	// A backoff much longer than the (zero) Retry-After: if the client
+	// ignored the header and fell back to its own backoff, the second
+	// call would arrive after this delay, not immediately.
+	c := New(testEnv(srv.URL), WithMaxRetries(2), WithBackoff(2*time.Second))
+	_, err := c.Health(context.Background())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if calls != 2 {
+		t.Fatalf("expected 2 calls, got %d", calls)
+	}
+	gap := secondCallAt.Sub(firstCallAt)
+	if gap > 500*time.Millisecond {
+		t.Fatalf("expected an immediate retry per Retry-After: 0, waited %v (configured backoff was 2s)", gap)
+	}
+}
+
+func TestParseRetryAfter(t *testing.T) {
+	cases := []struct {
+		header string
+		want   time.Duration
+		wantOK bool
+	}{
+		{"5", 5 * time.Second, true},
+		{"0", 0, true}, // a valid, if degenerate, delay-seconds value
+		{"", 0, false},
+		{"not-a-number", 0, false},
+		{"-1", 0, false},
+		{"999999", maxRetryAfter, true}, // capped
+	}
+	for _, tc := range cases {
+		got, ok := parseRetryAfter(tc.header)
+		if got != tc.want || ok != tc.wantOK {
+			t.Errorf("parseRetryAfter(%q) = %v, %v; want %v, %v", tc.header, got, ok, tc.want, tc.wantOK)
+		}
+	}
+}
+
 func TestHealth_RateLimit_RetriesThenSucceeds(t *testing.T) {
 	calls := 0
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

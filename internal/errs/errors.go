@@ -7,6 +7,7 @@ package errs
 import (
 	"errors"
 	"fmt"
+	"time"
 )
 
 // Kind classifies an error into one of a fixed set of categories. Callers
@@ -32,11 +33,13 @@ const (
 
 // Error is the concrete error type returned by internal packages.
 type Error struct {
-	Kind       Kind   // category, used for branching/classification
-	Op         string // operation being performed, e.g. "appwrite.ListTables"
-	StatusCode int    // HTTP status code, 0 if not applicable
-	Retryable  bool   // whether the caller may retry this operation
-	Err        error  // wrapped underlying error, may be nil
+	Kind          Kind          // category, used for branching/classification
+	Op            string        // operation being performed, e.g. "appwrite.ListTables"
+	StatusCode    int           // HTTP status code, 0 if not applicable
+	Retryable     bool          // whether the caller may retry this operation
+	RetryAfter    time.Duration // server-suggested retry delay; meaningless unless hasRetryAfter
+	hasRetryAfter bool          // true iff WithRetryAfter was called — distinguishes "server said 0" from "no header"
+	Err           error         // wrapped underlying error, may be nil
 }
 
 func (e *Error) Error() string {
@@ -66,6 +69,14 @@ func (e *Error) WithStatus(code int) *Error {
 // WithRetryable sets whether the error is retryable and returns the receiver.
 func (e *Error) WithRetryable(retryable bool) *Error {
 	e.Retryable = retryable
+	return e
+}
+
+// WithRetryAfter records a server-suggested retry delay (e.g. from an
+// HTTP 429's Retry-After header) and returns the receiver for chaining.
+func (e *Error) WithRetryAfter(d time.Duration) *Error {
+	e.RetryAfter = d
+	e.hasRetryAfter = true
 	return e
 }
 
@@ -106,4 +117,16 @@ func IsRetryable(err error) bool {
 		return e.Retryable
 	}
 	return false
+}
+
+// RetryAfterOf returns the server-suggested retry delay recorded on err
+// (or a wrapped *Error), and whether one was present. A zero delay with
+// ok=true is a real, distinct case — a server can legitimately send
+// "Retry-After: 0" — and must not be confused with "no header at all".
+func RetryAfterOf(err error) (time.Duration, bool) {
+	var e *Error
+	if errors.As(err, &e) && e.hasRetryAfter {
+		return e.RetryAfter, true
+	}
+	return 0, false
 }

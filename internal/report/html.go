@@ -128,6 +128,18 @@ const htmlTemplateSource = `<!doctype html>
   <span class="badge badge-{{.Overall}}">Result: {{.Overall}}</span>
   <p class="counts">{{.PassCount}} pass &middot; {{.WarnCount}} warn &middot; {{.BlockCount}} block</p>
 
+  <section class="coverage">
+    <h2>Verification coverage</h2>
+    <p>A <strong>PASS</strong> means no difference was found <em>in what amg
+    checks</em> — not a proof this migration is complete, consistent, or
+    safe to cut over to. This applies to every run, regardless of result.</p>
+    <ul>
+      <li><strong>Always checked:</strong> resource existence, permissions, config, table schema (columns/indexes), file content (via MD5 signature)</li>
+      <li><strong>Checked if enabled:</strong> row content (<code>--sample-rows</code>, off by default)</li>
+      <li><strong>Never checked:</strong> relationships between resources, function/site code or deployed runtime behavior (config only), application-level invariants</li>
+    </ul>
+  </section>
+
   <h2>Findings</h2>
   {{if .Result.Findings}}
   <table>

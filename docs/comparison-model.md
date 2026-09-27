@@ -31,6 +31,8 @@ two unrelated "missing" + "unexpected" resources.
 | `name_changed` | BLOCK | Same resource ID, different `name`. |
 | `permission_changed` | BLOCK | `$permissions` differ (compared as sets — order doesn't matter). |
 | `config_changed` | BLOCK | One of `enabled`/`row_security`/`type`/`status` metadata differs. |
+| `schema_changed` | BLOCK | A table's column/index digest differs between source and destination — see [Schema verification](#schema-verification) below. |
+| `schema_unverified` | WARN | A table's schema digest is missing on at least one side, so schema equality could not be confirmed either way. |
 | `row_count_mismatch` | BLOCK | Table row counts differ and neither side hit Appwrite's count cap. |
 | `row_count_unconfirmed` | WARN | Row counts differ (or can't be compared meaningfully) because at least one side hit Appwrite's 5,000-row count cap — see docs/migration-semantics.md. Equal capped counts on both sides produce no finding at all. |
 | `row_count_unverified` | WARN | amg couldn't determine the row count on at least one side during inventory (see `Resource.CountError`) — a partial-verification case, not a hard failure. |
@@ -82,6 +84,33 @@ or IDs) will only be added once verified against that migration path's
 actual behavior, each with its own source citation and test — never
 guessed.
 
+## Schema verification
+
+Every table snapshot includes a `SchemaDigest`: a SHA-256 hash of that
+table's columns and indexes, computed by `appwrite.ListTables` for every
+table, always (not opt-in — unlike row sampling below). Appwrite's column
+model is polymorphic across roughly 18 types (string, integer, enum,
+relationship, etc., each with different fields), so rather than modeling
+every variant explicitly, amg canonicalizes: for each column and index,
+it strips transient/server-managed fields (`$id`, `$createdAt`,
+`$updatedAt`, `status`, `error`), sorts entries by `key`, marshals with
+Go's `encoding/json` (which sorts map keys), and hashes the result. This
+means the digest changes if and only if something about the actual
+column/index definitions changed — type, size, required-ness, default,
+array-ness, a changed or removed index — and is stable across reordering,
+re-fetching, or a column simply moving between "processing" and "available"
+status mid-migration.
+
+A `schema_changed` finding does not say *what* changed, only *that*
+something did — the digest is one-way. This mirrors the same
+digest-first, non-exhaustive-field-modeling approach already used for
+file content (`content_changed`, via Appwrite's own MD5) and row content
+(`row_content_changed`, below): amg detects drift reliably without
+committing to modeling every field of every Appwrite resource type ahead
+of time, which would both be a large surface to keep in sync with
+Appwrite's own evolving API and a poor way to spend a $0-budget,
+stdlib-only project's effort.
+
 ## Row content sampling (opt-in)
 
 By default, TablesDB rows are only *counted* (`amg.CountRows`), never
@@ -108,11 +137,23 @@ comparison meaningful) — this assumes row IDs are preserved by whatever
 migration path moved the data, the same assumption every other
 ID-matched comparison in this document already makes.
 
-## What this does not do yet
+## What this does not do
 
-No comparison for legacy Databases (collections/documents) or Sites
-(they aren't inventoried yet — see `Inventory.Unsupported`), no
-comparison of function *behavior* (only config: schedule, runtime,
-execute permissions, etc. — not what a function's code actually does),
-no persisted run-to-run history beyond the manifest files themselves, no
-exhaustive (non-sampled) row content verification.
+This list is deliberate, not a backlog — see the "Product boundary"
+section of the README for why each of these is out of scope rather than
+merely unimplemented.
+
+No comparison of function or site *behavior* (only config: schedule,
+runtime, execute permissions, etc. — not what a function's code actually
+does, and not a runtime probe of either). No relationship-integrity
+verification between resources (e.g. that a relationship column's
+referenced rows still exist) — amg compares each resource's own state,
+not cross-resource invariants. No application-level invariant checking
+(anything specific to what your app *means* by its data). No persisted
+run-to-run history beyond the manifest files themselves. No exhaustive
+(non-sampled) row content verification — see Row content sampling below.
+Legacy Databases (collections/documents) need no separate comparison
+path: verified against Appwrite's server source that they query the
+identical underlying storage TablesDB does, so comparing tables/rows
+already covers them (see `Collect`'s doc comment in
+`internal/inventory/collect.go` and docs/migration-semantics.md).

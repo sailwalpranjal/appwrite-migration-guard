@@ -39,4 +39,23 @@ func writeCompareTerminal(w io.Writer, title string, res *compare.Result) {
 
 	fmt.Fprintln(w)
 	fmt.Fprintf(w, "Result: %s\n", res.Overall())
+	fmt.Fprintln(w)
+	fmt.Fprintln(w, coverageNote)
 }
+
+// coverageNote is printed on every compare/verify/report result,
+// PASS included — a PASS here means "no difference found within what
+// amg checks," not "this migration is proven correct." Making this
+// explicit on every run (not just in docs a reader might not open) is a
+// direct response to the most serious criticism an external audit of
+// this project raised: that a green result could be over-read as a
+// stronger guarantee than the implementation actually provides. See
+// docs/comparison-model.md for the full rule table this summarizes.
+const coverageNote = `Verification coverage (always applies, this run and every run):
+  Always checked:  resource existence, permissions, config, table schema
+                   (columns/indexes), file content (via MD5 signature)
+  Checked if enabled: row content (--sample-rows; off by default)
+  Never checked: relationships between resources, function/site code or deployed
+                 runtime behavior (config only), application-level invariants
+A PASS here means "no difference found in what amg checks" — not a proof
+the migration is complete, consistent, or safe to cut over to.`

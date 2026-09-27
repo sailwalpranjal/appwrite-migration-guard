@@ -11,6 +11,22 @@ import (
 	"github.com/sailwalpranjal/appwrite-migration-guard/internal/inventory"
 )
 
+// Regression guard: after a manifest round-trips through JSON,
+// column_count/index_count decode as float64, not int — metadataInt must
+// handle both shapes, the same class of bug already fixed once for
+// list-valued metadata (equalMetadataValue in internal/compare).
+func TestMetadataInt_HandlesJSONRoundTrip(t *testing.T) {
+	if got := metadataInt(3); got != 3 {
+		t.Fatalf("native int: got %d, want 3", got)
+	}
+	if got := metadataInt(float64(3)); got != 3 {
+		t.Fatalf("post-JSON float64: got %d, want 3", got)
+	}
+	if got := metadataInt(nil); got != 0 {
+		t.Fatalf("absent value: got %d, want 0", got)
+	}
+}
+
 func TestPartialVerificationReason(t *testing.T) {
 	cases := []struct {
 		name       string
