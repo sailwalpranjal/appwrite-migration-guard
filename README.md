@@ -302,11 +302,32 @@ resources were deleted afterward.
 
 ## Migration lab
 
-Not yet built. The plan is a set of deterministic fixtures (missing
-document, missing file, changed permission, expected timestamp
-transformation, transient/persistent API failure, interrupted run) used to
-prove amg's comparison engine actually detects real problems — see
-[Roadmap](#roadmap).
+```bash
+go test ./lab/...
+```
+
+`lab/` is a deterministic, credential-free fault-injection suite: 8
+scenarios, run through the real client/pagination/retry/collection/
+comparison stack against `httptest` servers (not mocked-out internals),
+proving amg actually detects the problems it claims to:
+
+| Scenario | Proves |
+|---|---|
+| A — destination missing a table | `missing_resource` → BLOCK |
+| B — destination missing a file | `missing_resource` → BLOCK |
+| C — permission changed | `permission_changed` → BLOCK |
+| D — timestamps differ after "migration" | expected transformation → PASS, no finding |
+| E — transient API failure | retried automatically, run still succeeds |
+| F — persistent API failure | `Collect` returns an error, never a silent partial success |
+| G — interrupted run (context deadline) | `inventory.Collect` **and** `amg doctor` both error out, never exit OK |
+
+This is deliberately synthetic, fixture-driven data — unlike the rest of
+amg's development, which was proven against a live Appwrite Cloud
+project at every stage (see [Testing](#testing) and `CHANGELOG.md`). The
+lab's purpose is the opposite: repeatable, CI-runnable, credential-free
+regression coverage for specific edge cases. Both kinds of evidence are
+real; they answer different questions. This suite also runs in CI on
+every push (`.github/workflows/ci.yml`).
 
 ## Limitations
 
@@ -368,7 +389,8 @@ prove amg's comparison engine actually detects real problems — see
    inventory (config only, never env vars)~~ — done. Still open: legacy
    Databases (collections/documents), Sites.
 6. ~~Static HTML reporting (`amg report`)~~ — done, alongside JSON/text.
-7. Fault-injection migration lab + CI.
+7. ~~Fault-injection migration lab + CI~~ — done (`lab/`, runs in CI on
+   every push, `gofmt`/`go vet`/`go test -race`/`go build`).
 8. Cross-platform release binaries.
 
 ## Contributing

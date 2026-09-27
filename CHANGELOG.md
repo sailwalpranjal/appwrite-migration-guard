@@ -7,6 +7,23 @@ follows [Keep a Changelog](https://keepachangelog.com/).
 
 ### Added
 
+- `lab/`: the fault-injection migration lab (spec section 33), 8
+  deterministic scenarios (A-G, missing table, missing file, permission
+  change, expected timestamp transformation, transient failure/retry,
+  persistent failure/BLOCK, interrupted run/never-OK — G covers both
+  `inventory.Collect` and the full `amg doctor` CLI layer) run through
+  the real client/pagination/retry/collection/comparison stack against
+  `httptest` servers, not mocked internals. Runs in CI on every push.
+  Added `appwrite.WithBackoff` (mirroring `WithMaxRetries`) so this
+  external package can keep retry-scenario tests fast.
+  Caught and fixed a real bug while writing it: two of the "interrupted
+  run" tests deadlocked on their own cleanup — a channel meant to
+  unblock a stuck HTTP handler was closed by a `defer` that (via Go's
+  LIFO defer order) ran *after* `httptest.Server.Close()`, which itself
+  waits for in-flight handlers to return. Fixed by sleeping past the
+  test's deadline instead of coordinating through a channel.
+  CI (`.github/workflows/ci.yml`) now also fails on unformatted code
+  (`gofmt -l`), not just `go vet`/`go test`/`go build`.
 - Functions inventory and comparison (config only: runtime, schedule,
   timeout, execute permissions, logging, scopes, deployment retention,
   version — never behavior/code). `appwrite.Function` deliberately has

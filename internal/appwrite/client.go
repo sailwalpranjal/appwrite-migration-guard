@@ -55,6 +55,14 @@ func WithMaxRetries(n int) Option {
 	return func(c *Client) { c.maxRetries = n }
 }
 
+// WithBackoff overrides the base retry backoff duration (default 500ms,
+// exponential from there — see backoffDelay). Exported primarily so
+// tests outside this package (e.g. the fault-injection lab) can exercise
+// real retry behavior without paying for real-world backoff delays.
+func WithBackoff(d time.Duration) Option {
+	return func(c *Client) { c.backoff = d }
+}
+
 // WithTimeout overrides the per-request timeout.
 func WithTimeout(d time.Duration) Option {
 	return func(c *Client) { c.http.Timeout = d }
