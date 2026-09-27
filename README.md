@@ -336,7 +336,7 @@ see `CHANGELOG.md` for the exact date/commit of each.
 go test ./lab/...
 ```
 
-`lab/` is a deterministic, credential-free fault-injection suite: 8
+`lab/` is a deterministic, credential-free fault-injection suite: 10
 scenarios, run through the real client/pagination/retry/collection/
 comparison stack against `httptest` servers (not mocked-out internals),
 proving amg actually detects the problems it claims to:
@@ -350,6 +350,22 @@ proving amg actually detects the problems it claims to:
 | E — transient API failure | retried automatically, run still succeeds |
 | F — persistent API failure | `Collect` returns an error, never a silent partial success |
 | G — interrupted run (context deadline) | `inventory.Collect` **and** `amg doctor` both error out, never exit OK |
+| H — table schema half-migrated (a column silently dropped) | `schema_changed` → BLOCK |
+| I — server validation error | the specific message survives, never collapsed into a generic connectivity error |
+
+Scenarios H and I aren't hypothetical — each is modeled directly on a
+real, verified Appwrite bug, not invented: H on
+[appwrite/appwrite#12770](https://github.com/appwrite/appwrite/issues/12770)
+(a self-hosted upgrade silently dropped two columns from the `functions`
+table), I on
+[appwrite/appwrite#13477](https://github.com/appwrite/appwrite/issues/13477)
+(Appwrite's own backend endpoint, `Migrations/Appwrite/Report/Get.php`,
+catches the real exception — a missing `policies` field — and rethrows
+a generic "unable to connect" message, so the response the client
+receives was already masked server-side; amg's own error classification
+must not compound that by masking further). Both issues were fetched and
+read in full via the GitHub API before being encoded as scenarios here,
+not guessed from a title.
 
 This is deliberately synthetic, fixture-driven data — unlike the rest of
 amg's development, which was proven against a live Appwrite Cloud

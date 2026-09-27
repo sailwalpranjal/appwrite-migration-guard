@@ -23,6 +23,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -295,5 +296,95 @@ func TestScenarioG_InterruptedDoctorRun_NeverExitsOK(t *testing.T) {
 	code := cli.RunDoctor(ctx, nil, &stdout, &stderr)
 	if code == cli.ExitOK {
 		t.Fatalf("scenario G: an interrupted doctor run must never exit OK, got exit %d; stdout:\n%s", code, stdout.String())
+	}
+}
+
+// --- Scenario H: half-migrated table schema -> BLOCK -----------------------
+//
+// Grounded in a real, verified Appwrite bug (not a hypothetical):
+// appwrite/appwrite#12770, "Self-hosted 1.9.5 migration leaves functions
+// schema half-migrated: providerBranches/providerPaths missing after
+// rerun" (closed). After upgrading self-hosted Appwrite from 1.9.0 to
+// 1.9.5, Appwrite's own internal schema migration left the `functions`
+// table missing two columns Appwrite's own code expected — a Structure
+// exception at runtime, `Unknown attribute: "providerBranches"`. The
+// exact resource type (Functions vs. a user table) doesn't matter here:
+// the failure mode does — an Appwrite server's own migration/upgrade
+// path can silently drop columns from a table's schema. This scenario
+// proves amg's schema-digest check (see docs/comparison-model.md,
+// #schema-verification) catches exactly that: a "before" snapshot with
+// two columns and an "after" snapshot missing one of them.
+func TestScenarioH_HalfMigratedTableSchema_Blocks(t *testing.T) {
+	tableWithColumns := func(columns ...map[string]any) http.HandlerFunc {
+		return jsonHandler(map[string]any{"total": 1, "tables": []map[string]any{
+			{"$id": "orders", "databaseId": "db1", "name": "Orders", "columns": columns, "indexes": []any{}},
+		}})
+	}
+	statusCol := func(key, colType string) map[string]any {
+		return map[string]any{"key": key, "type": colType, "status": "available", "required": false}
+	}
+
+	// Before the (simulated) Appwrite upgrade: two columns present.
+	src := httptest.NewServer(emptyProjectHandler(map[string]http.HandlerFunc{
+		"/tablesdb":            jsonHandler(map[string]any{"total": 1, "databases": []map[string]any{{"$id": "db1", "name": "Main"}}}),
+		"/tablesdb/db1/tables": tableWithColumns(statusCol("customerId", "string"), statusCol("total", "integer")),
+	}))
+	defer src.Close()
+
+	// After: the upgrade silently dropped "total", mirroring #12770's
+	// providerBranches/providerPaths loss.
+	dst := httptest.NewServer(emptyProjectHandler(map[string]http.HandlerFunc{
+		"/tablesdb":            jsonHandler(map[string]any{"total": 1, "databases": []map[string]any{{"$id": "db1", "name": "Main"}}}),
+		"/tablesdb/db1/tables": tableWithColumns(statusCol("customerId", "string")),
+	}))
+	defer dst.Close()
+
+	res := compare.Compare("source", collect(t, src.URL), "destination", collect(t, dst.URL))
+	if res.Overall() != compare.SeverityBlock {
+		t.Fatalf("scenario H: expected BLOCK, got %s (%+v)", res.Overall(), res.Findings)
+	}
+	found := false
+	for _, f := range res.Findings {
+		if f.Rule == compare.RuleSchemaChanged && f.ResourceID == "orders" {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("scenario H: expected a schema_changed finding for 'orders' (dropped column), got %+v", res.Findings)
+	}
+}
+
+// --- Scenario I: server validation error is never masked as connectivity ---
+//
+// Also grounded in a real, verified Appwrite bug: appwrite/appwrite#13477,
+// "Self-hosted -> self-hosted migration fails at report stage — Missing
+// required field 'policies' for Appwrite\Models\Database is masked as
+// 'Unable to connect to the migration source'" (open at time of
+// writing). There, the masking happened server-side — Appwrite's own
+// Migrations/Appwrite/Report/Get.php caught the real exception and
+// rethrew a generic connectivity message — so the response a client
+// receives was already masked before it left Appwrite. amg can't
+// recover a message Appwrite never sent, but this scenario proves it
+// doesn't compound the problem at the full Collect() layer (a
+// unit-level version already exists in
+// internal/appwrite/client_test.go's TestHealth_ValidationError_SurfacesRealMessage):
+// whatever specific message the server *did* send must survive into
+// Collect's returned error, not be collapsed into a generic failure
+// string on amg's own side.
+func TestScenarioI_ValidationError_SurfacesRealMessage_NotMaskedAsConnectivity(t *testing.T) {
+	const specificMessage = `Missing required field "policies" for Appwrite\Models\Database`
+	src := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]any{"message": specificMessage, "code": 400})
+	}))
+	defer src.Close()
+
+	client := newClient(t, src.URL)
+	_, err := inventory.Collect(context.Background(), client, src.URL, "lab-project", inventory.Options{})
+	if err == nil {
+		t.Fatal("scenario I: expected Collect to return an error for a validation failure")
+	}
+	if !strings.Contains(err.Error(), specificMessage) {
+		t.Fatalf("scenario I: expected the server's specific validation message to survive, got: %v", err)
 	}
 }
