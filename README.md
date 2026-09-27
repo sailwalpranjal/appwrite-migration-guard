@@ -205,6 +205,13 @@ amg reads configuration from environment variables (and an optional local
 API keys are never logged, never written to manifests or reports, and are
 only ever sent as the `X-Appwrite-Key` HTTP header.
 
+Every command that talks to Appwrite (`doctor`, `inventory`, `snapshot`,
+`verify`, `preflight`) accepts `--timeout <duration>` (e.g. `--timeout
+10m`), bounding the whole run — the default (2-3 minutes, 10s for
+`doctor`) is sized for a small/medium project and a responsive network,
+not a large project or a slow self-hosted endpoint, so raise it if a run
+hits `context deadline exceeded` against real data.
+
 ### Getting a project and API key to test against
 
 **Appwrite Cloud** (fastest way to try amg against something real):

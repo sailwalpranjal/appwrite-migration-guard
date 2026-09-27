@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"testing"
+	"time"
 
 	"github.com/sailwalpranjal/appwrite-migration-guard/internal/appwrite"
 )
@@ -61,6 +62,29 @@ func TestRunDoctor_HealthyEndpoint(t *testing.T) {
 	code := RunDoctor(context.Background(), nil, &stdout, &stderr)
 	if code != ExitOK {
 		t.Fatalf("expected ExitOK, got %d; output:\n%s", code, stdout.String())
+	}
+}
+
+// TestRunDoctor_TimeoutFlag_IsConfigurable is a regression guard for a
+// real launch-readiness gap: every live-network command's deadline
+// (doctorTimeout, inventoryTimeout, etc.) was a hardcoded constant with
+// no override, so a slow or high-latency Appwrite endpoint had no
+// workaround short of rebuilding amg from source with a patched
+// constant. Proves --timeout actually reaches the request deadline: a
+// server that responds slower than the requested --timeout produces a
+// timeout-shaped failure, not a hang or a silent success.
+func TestRunDoctor_TimeoutFlag_IsConfigurable(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		time.Sleep(150 * time.Millisecond)
+		json.NewEncoder(w).Encode(appwrite.VersionInfo{Version: "2.3.0"})
+	}))
+	defer srv.Close()
+
+	withEnv(t, srv.URL, "proj1", "key1")
+	var stdout, stderr bytes.Buffer
+	code := RunDoctor(context.Background(), []string{"--timeout", "10ms"}, &stdout, &stderr)
+	if code == ExitOK {
+		t.Fatalf("expected a short --timeout to cause a failure against a slow server, got ExitOK; output:\n%s", stdout.String())
 	}
 }
 

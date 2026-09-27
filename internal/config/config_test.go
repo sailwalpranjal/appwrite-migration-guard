@@ -86,6 +86,29 @@ func TestLoadDotEnv_DoesNotOverrideExisting(t *testing.T) {
 	}
 }
 
+// TestLoadDotEnv_StripsLeadingBOM is a regression guard for a real bug:
+// a .env file saved with a leading UTF-8 BOM (common from Windows
+// editors — Notepad, and some VS Code configurations) silently prefixed
+// the first variable's key with the BOM rune, so os.LookupEnv never
+// matched the real name and the value was treated as never set, even
+// though it's visibly right there in the file.
+func TestLoadDotEnv_StripsLeadingBOM(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, ".env")
+	content := string(rune(0xFEFF)) + "APPWRITE_ENDPOINT=https://example.com/v1\nAPPWRITE_PROJECT_ID=p1\n"
+	if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	clearEnv(t, "APPWRITE_ENDPOINT", "APPWRITE_PROJECT_ID")
+
+	if err := LoadDotEnv(path); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got := os.Getenv("APPWRITE_ENDPOINT"); got != "https://example.com/v1" {
+		t.Fatalf("expected APPWRITE_ENDPOINT to be set despite the leading BOM, got %q", got)
+	}
+}
+
 func TestLoadDotEnv_MissingFileIsNotError(t *testing.T) {
 	if err := LoadDotEnv(filepath.Join(t.TempDir(), "does-not-exist.env")); err != nil {
 		t.Fatalf("expected no error for missing file, got %v", err)

@@ -3,6 +3,7 @@ package manifest
 import (
 	"bytes"
 	"encoding/json"
+	"os"
 	"path/filepath"
 	"testing"
 
@@ -59,6 +60,38 @@ func TestRead_MissingFile(t *testing.T) {
 	_, err := Read(filepath.Join(t.TempDir(), "does-not-exist.json"))
 	if !errs.IsKind(err, errs.KindNotFound) {
 		t.Fatalf("expected KindNotFound, got %v", err)
+	}
+}
+
+// TestRead_TolerantOfLeadingBOM is a regression guard for a real bug,
+// reproduced live: `./amg snapshot --out m.json` on Windows PowerShell
+// with a redirect (or any tool/editor that writes UTF-8-with-BOM) can
+// hand amg a manifest file with a leading byte-order mark.
+// encoding/json treats that as invalid JSON and refuses to decode it,
+// which previously surfaced as a decode error even though the file's
+// actual JSON content is entirely valid.
+func TestRead_TolerantOfLeadingBOM(t *testing.T) {
+	inv := inventory.New("https://example.com/v1", "proj1")
+	m, err := New("source", inv)
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	b, err := json.MarshalIndent(m, "", "  ")
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	path := filepath.Join(t.TempDir(), "manifest.json")
+	bom := append([]byte{0xEF, 0xBB, 0xBF}, b...)
+	if err := os.WriteFile(path, bom, 0o644); err != nil {
+		t.Fatalf("write BOM-prefixed manifest: %v", err)
+	}
+
+	got, err := Read(path)
+	if err != nil {
+		t.Fatalf("expected Read to tolerate a leading BOM, got error: %v", err)
+	}
+	if got.RunID != m.RunID {
+		t.Fatalf("round-tripped manifest mismatch: %+v", got)
 	}
 }
 
