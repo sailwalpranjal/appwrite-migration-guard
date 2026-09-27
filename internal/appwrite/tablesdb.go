@@ -1,12 +1,14 @@
 package appwrite
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"sort"
 	"strings"
 
 	"github.com/sailwalpranjal/appwrite-migration-guard/internal/errs"
@@ -46,17 +48,34 @@ type databaseListResponse struct {
 }
 
 // Table is one table within a TablesDB database.
+//
+// Columns/Indexes are captured as raw JSON, not a fully-typed model:
+// Appwrite's column model is polymorphic across ~18 column types
+// (string, integer, bigint, enum, relationship, point, ...), each with
+// different type-specific fields (size, min/max, elements, relatedTable,
+// ...) — see Model/Column.php and its ColumnString.php/ColumnEnum.php/
+// etc. siblings. Rather than model every variant, ListTables computes
+// SchemaDigest: a content hash over the canonicalized columns+indexes,
+// the same "hash the content, don't enumerate every field" pattern
+// already used for row sampling (RowSample) — any drift in column type,
+// size, required-ness, enum values, or index definition changes the
+// digest, without needing per-type Go structs.
 type Table struct {
-	ID          string   `json:"$id"`
-	CreatedAt   string   `json:"$createdAt"`
-	UpdatedAt   string   `json:"$updatedAt"`
-	Permissions []string `json:"$permissions"`
-	DatabaseID  string   `json:"databaseId"`
-	Name        string   `json:"name"`
-	Enabled     bool     `json:"enabled"`
-	RowSecurity bool     `json:"rowSecurity"`
-	BytesMax    int64    `json:"bytesMax"`
-	BytesUsed   int64    `json:"bytesUsed"`
+	ID           string            `json:"$id"`
+	CreatedAt    string            `json:"$createdAt"`
+	UpdatedAt    string            `json:"$updatedAt"`
+	Permissions  []string          `json:"$permissions"`
+	DatabaseID   string            `json:"databaseId"`
+	Name         string            `json:"name"`
+	Enabled      bool              `json:"enabled"`
+	RowSecurity  bool              `json:"rowSecurity"`
+	BytesMax     int64             `json:"bytesMax"`
+	BytesUsed    int64             `json:"bytesUsed"`
+	Columns      []json.RawMessage `json:"columns"`
+	Indexes      []json.RawMessage `json:"indexes"`
+	ColumnCount  int               `json:"-"` // set by ListTables after decode
+	IndexCount   int               `json:"-"` // set by ListTables after decode
+	SchemaDigest string            `json:"-"` // set by ListTables after decode
 }
 
 type tableListResponse struct {
@@ -107,8 +126,83 @@ func (c *Client) ListTables(ctx context.Context, databaseID string) ([]Table, er
 		if err := c.request(ctx, op, http.MethodGet, path, QueryParams(queries...), nil, &out); err != nil {
 			return nil, err
 		}
+		for i := range out.Tables {
+			t := &out.Tables[i]
+			t.ColumnCount = len(t.Columns)
+			t.IndexCount = len(t.Indexes)
+			digest, err := schemaDigest(t.Columns, t.Indexes)
+			if err != nil {
+				return nil, errs.New(errs.KindInvalidResponse, op, fmt.Errorf("table %q: compute schema digest: %w", t.ID, err))
+			}
+			t.SchemaDigest = digest
+		}
 		return out.Tables, nil
 	})
+}
+
+// schemaDigest computes a deterministic content hash over a table's
+// columns and indexes. Each component is canonicalized (transient fields
+// $id/$createdAt/$updatedAt/status/error stripped — these change on
+// every poll or async attribute-processing tick and carry no schema
+// information) and sorted by "key" before hashing, so field order in
+// Appwrite's response never affects the digest, only actual schema
+// content does.
+func schemaDigest(columns, indexes []json.RawMessage) (string, error) {
+	colDigest, err := canonicalizeComponents(columns)
+	if err != nil {
+		return "", fmt.Errorf("columns: %w", err)
+	}
+	idxDigest, err := canonicalizeComponents(indexes)
+	if err != nil {
+		return "", fmt.Errorf("indexes: %w", err)
+	}
+
+	h := sha256.New()
+	h.Write([]byte("columns:"))
+	h.Write(colDigest)
+	h.Write([]byte("indexes:"))
+	h.Write(idxDigest)
+	return hex.EncodeToString(h.Sum(nil)), nil
+}
+
+// canonicalizeComponents strips transient fields from each raw column/
+// index object, sorts the results by "key" for order-independence, and
+// returns their concatenated canonical JSON.
+func canonicalizeComponents(components []json.RawMessage) ([]byte, error) {
+	type entry struct {
+		key   string
+		canon []byte
+	}
+	entries := make([]entry, 0, len(components))
+	for _, raw := range components {
+		var m map[string]json.RawMessage
+		if err := json.Unmarshal(raw, &m); err != nil {
+			return nil, err
+		}
+		delete(m, "$id")
+		delete(m, "$createdAt")
+		delete(m, "$updatedAt")
+		delete(m, "status")
+		delete(m, "error")
+
+		var key string
+		if raw, ok := m["key"]; ok {
+			_ = json.Unmarshal(raw, &key)
+		}
+		canon, err := json.Marshal(m) // encoding/json sorts map keys
+		if err != nil {
+			return nil, err
+		}
+		entries = append(entries, entry{key: key, canon: canon})
+	}
+	sort.Slice(entries, func(i, j int) bool { return entries[i].key < entries[j].key })
+
+	var buf bytes.Buffer
+	for _, e := range entries {
+		buf.Write(e.canon)
+		buf.WriteByte('\n')
+	}
+	return buf.Bytes(), nil
 }
 
 // CountRows returns the number of rows in a table without downloading row

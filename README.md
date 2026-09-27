@@ -48,6 +48,23 @@ An independent, local-first CLI that:
 - Not AI/ML-based. There is no model, no LLM, no generated analysis —
   every check is an explicit, documented rule.
 
+### Product boundary
+
+A few things amg deliberately does not do, because they fall outside
+"verify Appwrite resource state matches" into a different, larger
+product: relationship-integrity verification across resources (that a
+relationship column's referenced rows still exist), runtime probes of
+function/site behavior (as opposed to their config), application-level
+invariant checking (anything specific to what *your* app means by its
+data), policy-as-code or approval workflows, and backup/rollback
+verification. Each of these would require either executing your
+application's own logic or encoding assumptions about it that amg has no
+way to verify generically — building them in would turn amg into a
+different, much larger product (a generic data-integrity/monitoring
+platform) with a correspondingly larger surface to get wrong. See
+[docs/comparison-model.md](docs/comparison-model.md#what-this-does-not-do)
+for the precise, current list of what *is* and isn't compared.
+
 ## Supported Appwrite environments
 
 - **Appwrite Cloud**, when `APPWRITE_ENDPOINT`/`AMG_*_ENDPOINT` points at
@@ -128,8 +145,11 @@ and prints exactly what changed, classified PASS/WARN/BLOCK. See
 
 `verify` does the same comparison live: it inventories `AMG_SOURCE_*` and
 `AMG_DEST_*` concurrently, then runs the identical offline comparison
-engine `compare` uses. This is the "did my migration actually work"
-command.
+engine `compare` uses. It answers "does the destination match the source
+on everything amg checks" — resource existence, permissions, config,
+table schema, and (if enabled) row/file content — not "is this migration
+correct end to end"; see [docs/comparison-model.md](docs/comparison-model.md#what-this-does-not-do)
+for what's deliberately outside that check, on every result including PASS.
 
 ```bash
 ./amg preflight
@@ -349,8 +369,12 @@ every push (`.github/workflows/ci.yml`).
 ## Limitations
 
 - Pre-alpha: every command (`version`, `doctor`, `inventory`, `snapshot`,
-  `compare`, `verify`, `preflight`, `report`) does real work now — what's
-  missing is breadth of resource coverage, not depth of implementation.
+  `compare`, `verify`, `preflight`, `report`) does real work now against a
+  live Appwrite project. What's still missing is listed item by item
+  below and in [Roadmap](#roadmap) — some are resource-coverage gaps,
+  some are depth gaps (e.g. table schema/column/index drift, closed in
+  this stage); treat this list, not a summary phrase, as the source of
+  truth for what amg does and doesn't check.
 - `preflight`'s "destination conflict" check is ID-based only: it flags a
   resource ID that already exists on the destination, but cannot tell you
   *why* it's there or whether that's actually a problem for your specific

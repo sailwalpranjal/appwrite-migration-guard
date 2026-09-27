@@ -68,6 +68,8 @@ const (
 	RuleRowSampleMissing     = "row_sample_missing"
 	RuleRowSampleUnexpected  = "row_sample_unexpected"
 	RuleRowSampleUnverified  = "row_sample_unverified"
+	RuleSchemaChanged        = "schema_changed"
+	RuleSchemaUnverified     = "schema_unverified"
 )
 
 // ResultSchemaVersion is bumped whenever Result's JSON shape changes in a
@@ -189,6 +191,11 @@ func compareMatched(s, d inventory.Resource) []Finding {
 
 	switch s.Type {
 	case inventory.ResourceTable:
+		if s.SchemaDigest != "" && d.SchemaDigest != "" && s.SchemaDigest != d.SchemaDigest {
+			add(SeverityBlock, RuleSchemaChanged, fmt.Sprintf("table %q schema changed (columns/indexes): digest %s -> %s", s.ID, s.SchemaDigest, d.SchemaDigest))
+		} else if s.SchemaDigest == "" || d.SchemaDigest == "" {
+			add(SeverityWarn, RuleSchemaUnverified, fmt.Sprintf("table %q schema digest missing on at least one side; schema could not be verified", s.ID))
+		}
 		findings = append(findings, compareRowCounts(s, d)...)
 		findings = append(findings, compareRowSamples(s, d)...)
 	case inventory.ResourceFile:

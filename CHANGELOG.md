@@ -5,6 +5,70 @@ follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+### Added
+
+- Table schema (column/index) drift detection. `appwrite.ListTables` now
+  computes a `SchemaDigest` for every table — a SHA-256 hash of its
+  columns and indexes, canonicalized (transient fields stripped, entries
+  sorted by `key`) so the digest is stable across reordering and
+  server-side status transitions but changes if and only if an actual
+  column/index definition changed. `compare` now emits `schema_changed`
+  (BLOCK) when digests differ and `schema_unverified` (WARN) when a
+  digest is missing on either side. This was the most concrete gap named
+  in an external audit of the project: amg previously verified table
+  *existence* and row content/counts but never that a table's actual
+  column/index shape matched between source and destination. See
+  docs/comparison-model.md#schema-verification.
+- `amg` now actually honors a `Retry-After` response header on HTTP 429
+  from Appwrite, instead of always falling back to its own (much
+  shorter) configured backoff — closing a gap where amg could hammer a
+  rate-limited server faster than the server itself asked for. Parses
+  the delay-seconds form only (not HTTP-date, a disclosed limitation
+  rather than a guess), capped at 2 minutes.
+- `manifest.Read` now fails closed on a manifest with a newer
+  `schema_version` than the running build supports, matching the check
+  `amg report` already had for `compare.Result` — closing an
+  inconsistency an external audit correctly flagged.
+- `amg compare`/`verify`/`report` (both terminal and HTML output) now
+  print an explicit verification-coverage summary after every result,
+  PASS included: what's checked, what's checked only if enabled, and
+  what's never checked. Responds directly to an external audit's central
+  criticism — that a green PASS could be over-read as a stronger
+  guarantee than the implementation provides — by making the boundary
+  visible on every run rather than only in docs a reader might not open.
+- README: added a "Product boundary" section explicitly naming what amg
+  will not do (relationship-integrity verification, runtime behavior
+  probes, application-level invariants, policy/approval workflows,
+  backup/rollback verification) and why — these were demanded by the
+  same external audit but fall outside amg's stated scope (spec's
+  product-boundary/non-goals) into a materially different, larger
+  product. Also corrected the "breadth, not depth" status line (schema
+  drift was a real depth gap, now closed) and softened `verify`'s
+  description to state precisely what it checks rather than implying a
+  general migration-correctness proof.
+
+Self code-reviewed before landing; the review caught two real issues,
+both fixed:
+- `errs.RetryAfterOf` used `RetryAfter > 0` to detect a server-supplied
+  delay, which silently treated a legitimate `Retry-After: 0` the same
+  as "no header at all" and fell back to amg's own longer backoff —
+  exactly backwards from the fix's intent. Fixed with an explicit
+  presence flag (`hasRetryAfter`) instead of a zero-value check, with a
+  new regression test (`TestHealth_RateLimit_RetryAfterZero_RetriesImmediately`)
+  proving a zero-delay header is honored.
+- The coverage note's "Checked if enabled" line grouped Storage file
+  content (verified unconditionally, every run, via MD5) together with
+  row sampling (genuinely opt-in) — self-contradictory in a note whose
+  purpose is to prevent over-reading amg's guarantees. Reworded to
+  "Always checked" / "Checked if enabled" in both the terminal and HTML
+  output.
+Live-verified against a real Appwrite Cloud project: created a table
+with a string column, snapshotted, widened the column
+(`size: 50 -> 100`), snapshotted again, and confirmed `amg compare`
+reports `schema_changed` → BLOCK with the two differing digests, while
+comparing a manifest against itself stays PASS (no false positive from
+canonicalization order/status-field handling).
+
 ### Documentation
 
 - Added CI/Go Report Card/pkg.go.dev/License badges to the README.

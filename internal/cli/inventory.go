@@ -104,10 +104,12 @@ func writeInventorySummary(w io.Writer, inv *inventory.Inventory) {
 			if r.RowCountCapped {
 				rows = fmt.Sprintf(">=%d rows (capped)", r.RowCount)
 			}
+			cols := metadataInt(r.Metadata["column_count"])
+			idxs := metadataInt(r.Metadata["index_count"])
 			if r.CountError != "" {
 				fmt.Fprintf(w, "  %-5s table   %-22s %-30s row count unavailable: %s\n", StatusWarn, r.ID, r.Name, r.CountError)
 			} else {
-				fmt.Fprintf(w, "  %-5s table   %-22s %-30s %s\n", StatusPass, r.ID, r.Name, rows)
+				fmt.Fprintf(w, "  %-5s table   %-22s %-30s %s, %d column(s), %d index(es)\n", StatusPass, r.ID, r.Name, rows, cols, idxs)
 			}
 			if r.SampleError != "" {
 				fmt.Fprintf(w, "         %-5s row sample unavailable: %s\n", StatusWarn, r.SampleError)
@@ -146,6 +148,22 @@ func writeInventorySummary(w io.Writer, inv *inventory.Inventory) {
 		fmt.Fprintf(w, "Result: %s (%s)\n", StatusWarn, reason)
 	} else {
 		fmt.Fprintf(w, "Result: %s\n", StatusPass)
+	}
+}
+
+// metadataInt reads a Resource.Metadata int value that may be a native
+// Go int (fresh from Collect) or a float64 (the same value after a
+// manifest round-trips through encoding/json, which decodes all JSON
+// numbers into float64 for an `any` target) — the same dual-shape
+// problem equalMetadataValue in internal/compare handles for lists.
+func metadataInt(v any) int {
+	switch x := v.(type) {
+	case int:
+		return x
+	case float64:
+		return int(x)
+	default:
+		return 0
 	}
 }
 

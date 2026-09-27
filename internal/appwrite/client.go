@@ -20,6 +20,7 @@ import (
 	"math/rand"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 	"time"
 
@@ -128,6 +129,14 @@ func (c *Client) requestAuth(ctx context.Context, op, method, path string, query
 	for attempt := 0; attempt <= c.maxRetries; attempt++ {
 		if attempt > 0 {
 			delay := backoffDelay(c.backoff, attempt)
+			// A server-suggested Retry-After (e.g. on a 429) takes
+			// priority over amg's own guess: retrying sooner than a rate
+			// limiter asked for only makes throttling worse, and Appwrite
+			// knows its own recovery time better than a fixed backoff
+			// curve does.
+			if ra, ok := errs.RetryAfterOf(lastErr); ok {
+				delay = ra
+			}
 			select {
 			case <-ctx.Done():
 				return errs.New(errs.KindTimeout, op, ctx.Err())
@@ -225,7 +234,11 @@ func classifyHTTPError(op string, resp *http.Response, payload []byte) error {
 	case http.StatusNotFound:
 		return errs.New(errs.KindNotFound, op, base).WithStatus(resp.StatusCode).WithRetryable(false)
 	case http.StatusTooManyRequests:
-		return errs.New(errs.KindRateLimit, op, withRetryAfter(base, resp)).WithStatus(resp.StatusCode).WithRetryable(true)
+		rateLimitErr := errs.New(errs.KindRateLimit, op, withRetryAfter(base, resp)).WithStatus(resp.StatusCode).WithRetryable(true)
+		if d, ok := parseRetryAfter(resp.Header.Get("Retry-After")); ok {
+			rateLimitErr.WithRetryAfter(d)
+		}
+		return rateLimitErr
 	case http.StatusBadRequest, http.StatusUnprocessableEntity:
 		return errs.New(errs.KindValidation, op, base).WithStatus(resp.StatusCode).WithRetryable(false)
 	case http.StatusRequestTimeout, http.StatusGatewayTimeout:
@@ -243,6 +256,35 @@ func withRetryAfter(base error, resp *http.Response) error {
 		return fmt.Errorf("%w (retry-after: %s)", base, ra)
 	}
 	return base
+}
+
+// maxRetryAfter caps how long a single server-suggested delay is allowed
+// to block a retry loop, regardless of what the server asks for — a
+// malicious or misconfigured server sending "Retry-After: 999999" must
+// not be able to hang amg for hours.
+const maxRetryAfter = 2 * time.Minute
+
+// parseRetryAfter parses the delay-seconds form of the Retry-After
+// header (RFC 9110 §10.2.3: "A non-negative decimal integer, representing
+// time in seconds"). The HTTP-date form of the same header is
+// deliberately not handled — Appwrite's server responses were not
+// observed to use it, and guessing at a date-parsing strategy for a
+// header amg has not seen in practice would risk exactly the kind of
+// invented behavior this project avoids; ok is false in that case and
+// the caller falls back to its own exponential backoff.
+func parseRetryAfter(header string) (time.Duration, bool) {
+	if header == "" {
+		return 0, false
+	}
+	seconds, err := strconv.Atoi(strings.TrimSpace(header))
+	if err != nil || seconds < 0 {
+		return 0, false
+	}
+	d := time.Duration(seconds) * time.Second
+	if d > maxRetryAfter {
+		d = maxRetryAfter
+	}
+	return d, true
 }
 
 // backoffDelay returns an exponential backoff with jitter for attempt
