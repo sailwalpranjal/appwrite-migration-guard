@@ -5,6 +5,17 @@ follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+Nothing yet.
+
+## [0.1.0] - 2026-09-27
+
+First public release. Pre-alpha (see README) — every command listed
+below does real work against a live Appwrite project, verified as
+described inline and in the entries below; this is a prerelease, not a
+claim of API stability. See [docs/known-false-negatives.md](docs/known-false-negatives.md)
+and [docs/assurance-boundary.md](docs/assurance-boundary.md) for exactly
+what this release does and doesn't verify.
+
 ### Added
 
 - `--json` on `doctor` and `preflight`, and `amg report` now

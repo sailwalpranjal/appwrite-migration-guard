@@ -87,21 +87,21 @@ cd appwrite-migration-guard
 go build -o amg ./cmd/amg
 ```
 
-`go install github.com/sailwalpranjal/appwrite-migration-guard/cmd/amg@latest`
-does **not** work yet — no tag has been pushed, so there is no `@latest`
-version for the Go module proxy to resolve, and it will fail with a "no
-matching versions" error. Until the first tag, use
-`go install github.com/sailwalpranjal/appwrite-migration-guard/cmd/amg@main`
-instead, or clone and `go build` as above.
+```bash
+go install github.com/sailwalpranjal/appwrite-migration-guard/cmd/amg@latest
+```
 
-Release automation (`.goreleaser.yaml`, `.github/workflows/release.yml`,
-[GoReleaser](https://goreleaser.com)) is in place to build Linux/macOS/
-Windows binaries (amd64 + arm64, minus Windows/arm64) on every `vX.Y.Z`
-tag — validated locally with `goreleaser build --snapshot` and
-`goreleaser release --snapshot --skip=publish` (all 5 targets build,
-archive, and the resulting binary runs and reports the correct injected
-version). No tag has been pushed yet, though — until the first release,
-building from source is the only option.
+works once `v0.1.0` is published (the Go module proxy can take a few
+minutes to index a brand new tag — use `@v0.1.0` explicitly if
+`@latest` hasn't picked it up yet).
+
+Prebuilt binaries for Linux/macOS/Windows (amd64 + arm64, minus
+Windows/arm64) are attached to each
+[GitHub release](https://github.com/sailwalpranjal/appwrite-migration-guard/releases) —
+download the archive for your platform, verify it against the release's
+`checksums.txt`, and extract. Built by
+[GoReleaser](https://goreleaser.com) (`.goreleaser.yaml`,
+`.github/workflows/release.yml`) on every `vX.Y.Z` tag push.
 
 ## Quick start
 
@@ -482,7 +482,6 @@ every push (`.github/workflows/ci.yml`).
   paths may have more expected transformations amg doesn't know about yet.
 - Not tested against every self-hosted Appwrite version — verified so far
   against Appwrite Cloud running server version 2.3.0.
-- Windows/macOS/Linux binaries are not yet published; build from source.
 - See [docs/known-false-negatives.md](docs/known-false-negatives.md) for
   a concrete, table-form list of specific differences amg's current
   checks will not catch (a narrower, more specific companion to this
@@ -510,8 +509,8 @@ every push (`.github/workflows/ci.yml`).
 6. ~~Static HTML reporting (`amg report`)~~ — done, alongside JSON/text.
 7. ~~Fault-injection migration lab + CI~~ — done (`lab/`, runs in CI on
    every push, `gofmt`/`go vet`/`go test -race`/`go build`).
-8. ~~Cross-platform release binaries~~ — automation done and locally
-   validated; no tag pushed yet, so no release exists on GitHub yet.
+8. ~~Cross-platform release binaries~~ — done: see
+   [releases](https://github.com/sailwalpranjal/appwrite-migration-guard/releases).
 
 ## Contributing
 
