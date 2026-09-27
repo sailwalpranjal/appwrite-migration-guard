@@ -81,6 +81,36 @@ func TestRunPreflight_NoConflicts_Pass(t *testing.T) {
 	}
 }
 
+// TestRunPreflight_JSONFlag_ProducesValidChecklistResult is a
+// regression guard for the same real documented limitation
+// TestRunDoctor_JSONFlag_ProducesValidChecklistResult covers: preflight
+// had no --json output at all, so amg report had nothing to render even
+// after gaining ChecklistResult support.
+func TestRunPreflight_JSONFlag_ProducesValidChecklistResult(t *testing.T) {
+	src := preflightServer(t, "2.3.0", []string{"db-a"})
+	defer src.Close()
+	dst := preflightServer(t, "2.3.0", []string{"db-b"})
+	defer dst.Close()
+	withSourceDestEnv(t, src.URL, dst.URL)
+
+	var stdout, stderr bytes.Buffer
+	code := RunPreflight(context.Background(), []string{"--json"}, &stdout, &stderr)
+	if code != ExitOK {
+		t.Fatalf("expected ExitOK, got %d; stderr:\n%s", code, stderr.String())
+	}
+
+	var res ChecklistResult
+	if err := json.Unmarshal(stdout.Bytes(), &res); err != nil {
+		t.Fatalf("expected valid JSON, got error %v; output:\n%s", err, stdout.String())
+	}
+	if res.Command != "preflight" {
+		t.Fatalf("expected command %q, got %q", "preflight", res.Command)
+	}
+	if res.Overall != StatusPass {
+		t.Fatalf("expected overall PASS, got %s (%+v)", res.Overall, res.Checks)
+	}
+}
+
 // TestRunPreflight_ResourcesFlag_NoConflicts_DisclosesScope is a
 // regression guard caught in self-review: an unqualified "No
 // destination resource ID conflicts" PASS after a --resources-narrowed
