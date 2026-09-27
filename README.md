@@ -1,30 +1,22 @@
 # Appwrite Migration Guard (amg)
 
+[![CI](https://github.com/sailwalpranjal/appwrite-migration-guard/actions/workflows/ci.yml/badge.svg)](https://github.com/sailwalpranjal/appwrite-migration-guard/actions/workflows/ci.yml)
+[![Go Report Card](https://goreportcard.com/badge/github.com/sailwalpranjal/appwrite-migration-guard)](https://goreportcard.com/report/github.com/sailwalpranjal/appwrite-migration-guard)
+[![Go Reference](https://pkg.go.dev/badge/github.com/sailwalpranjal/appwrite-migration-guard.svg)](https://pkg.go.dev/github.com/sailwalpranjal/appwrite-migration-guard)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+
 **Verify Appwrite changes before they become incidents.**
 
-> **Status: early stage, but every core command is real.** All 8
-> commands — `version`, `doctor`, `inventory`, `snapshot`, `compare`,
-> `verify`, `preflight`, `report` — are implemented, tested, and
-> verified against a live Appwrite Cloud project, covering TablesDB
-> (databases/tables/rows, with opt-in sampled row *content* verification
-> via `--sample-rows`), Storage (buckets/files, with file
-> content-integrity checks via MD5 signature), Users, Functions, and
-> Sites (administrative/config state only — see
-> [Limitations](#limitations) for exactly what's excluded and why,
-> including a live test proving a real password hash and a real
-> env-var-shaped secret never reach a manifest), and HTML/JSON/text
-> reporting. Every resource type from the original spec is now
-> inventoried — including legacy Databases (collections/documents),
-> which needed no separate collector: verified live that the legacy API
-> reads the identical underlying data TablesDB does. Deliberately
-> introduced a permission change, a config change, a deleted table,
-> changed file content, a changed row's content, and a destination
-> resource ID collision, and confirmed amg caught every one of them. The
-> original roadmap's 8 items are now all done, including a
-> fault-injection lab (`lab/`, runs in CI) and validated release
-> automation — see [Roadmap](#roadmap). This README describes what
-> exists today, not a finished, battle-tested product: it's pre-alpha,
-> verified but young.
+> **Status: pre-alpha, but every command is real and live-verified.**
+> All 8 commands work end to end against a live Appwrite Cloud project —
+> every resource type from the original spec (TablesDB, Storage, Users,
+> Functions, Sites) is inventoried and compared, with a documented,
+> tested boundary on what's deliberately never collected (passwords,
+> emails, function/site environment variables — see
+> [Limitations](#limitations)). Nine separate live-verification passes
+> are logged under [Testing](#testing), each introducing a real change
+> and confirming amg caught it. This README describes what exists today
+> — see [Roadmap](#roadmap) for what's still open.
 
 ## The problem
 
@@ -217,7 +209,14 @@ Result: BLOCK
 
 The same result rendered with `amg report --format html` produces a
 static page with a PASS/WARN/BLOCK badge, a findings table, and no
-external dependencies — safe to open offline or attach to a PR.
+external dependencies — safe to open offline or attach to a PR:
+
+![Example amg HTML report showing a BLOCK result with missing_resource, permission_changed, content_changed, row_count_unconfirmed, and unexpected_resource findings](docs/images/report-example.png)
+
+*Illustrative example with synthetic project/resource names (`production`,
+`staging-migrated`, `orders`, `avatars`) — real `amg compare`/`report`
+output, not a mockup, generated the same way the [Testing](#testing)
+section's live-verification runs were.*
 
 ## Architecture
 
