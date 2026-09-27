@@ -117,9 +117,17 @@ func TestWrite_DeterministicAsideFromRunIDAndTimestamp(t *testing.T) {
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}
-	// Normalize the two fields that are correctly fresh per invocation.
+	// Normalize the fields that are correctly fresh per invocation:
+	// Manifest.RunID/CapturedAt, and Inventory.GeneratedAt (set
+	// independently by each buildInv() call via time.Now()). Missing this
+	// last one made the test flaky-by-construction rather than a real
+	// regression guard: two time.Now() calls a few instructions apart
+	// happened to round to the same nanosecond often enough on Windows to
+	// pass locally, but reliably produced two different timestamps (and
+	// so a spurious failure) on Linux CI's higher-resolution clock.
 	m2.RunID = m1.RunID
 	m2.CapturedAt = m1.CapturedAt
+	m2.Inventory.GeneratedAt = m1.Inventory.GeneratedAt
 
 	b1, err := json.MarshalIndent(m1, "", "  ")
 	if err != nil {

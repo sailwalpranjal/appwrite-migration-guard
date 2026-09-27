@@ -1,7 +1,6 @@
 # Appwrite Migration Guard (amg)
 
 [![CI](https://github.com/sailwalpranjal/appwrite-migration-guard/actions/workflows/ci.yml/badge.svg)](https://github.com/sailwalpranjal/appwrite-migration-guard/actions/workflows/ci.yml)
-[![Go Report Card](https://goreportcard.com/badge/github.com/sailwalpranjal/appwrite-migration-guard)](https://goreportcard.com/report/github.com/sailwalpranjal/appwrite-migration-guard)
 [![Go Reference](https://pkg.go.dev/badge/github.com/sailwalpranjal/appwrite-migration-guard.svg)](https://pkg.go.dev/github.com/sailwalpranjal/appwrite-migration-guard)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
