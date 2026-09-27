@@ -5,6 +5,20 @@ follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+### Documentation
+
+- Added CI/Go Report Card/pkg.go.dev/License badges to the README.
+- Compressed the top status blurb from a 20+ line wall of text down to
+  a few sentences, moving detailed verification evidence into the
+  existing Testing section rather than duplicating it up top.
+- Added a real screenshot of `amg report --format html`'s output
+  (`docs/images/report-example.png`) to the Example report section —
+  rendered with headless Chrome from genuine `amg compare`/`report`
+  output (synthetic project/resource names, real tool, not a mockup),
+  then re-generated once to remove a `PASS`-severity row from the demo
+  data that didn't reflect how the real engine behaves (it never emits
+  a Finding for a resource with no differences).
+
 ### Added
 
 - Sites inventory and comparison (config only: framework, build/install/
