@@ -239,6 +239,15 @@ const htmlTemplateSource = `<!doctype html>
   <span class="badge badge-{{.Overall}}">Result: {{.Overall}}</span>
   <p class="counts">{{.PassCount}} pass &middot; {{.WarnCount}} warn &middot; {{.BlockCount}} block</p>
 
+  {{if .Result.CoverageMismatch}}
+  <p class="badge badge-WARN" style="display:block;margin-top:12px">
+    Source and destination requested different resource categories
+    (<code>--resources</code>): source={{.Result.SourceCollected}}
+    dest={{.Result.DestCollected}}. A category present on only one side
+    won't produce a reliable missing/unexpected finding for that category.
+  </p>
+  {{end}}
+
   {{if .ByResource}}
   <table class="breakdown">
     <caption>Findings by resource type (PASS is never listed here — an unaffected resource type produces no rows, not a "0" row).</caption>

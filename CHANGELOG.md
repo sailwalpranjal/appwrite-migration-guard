@@ -7,6 +7,45 @@ follows [Keep a Changelog](https://keepachangelog.com/).
 
 ### Added
 
+- `--resources tables,storage,users,functions,sites` on `inventory`,
+  `snapshot`, `verify`, and `preflight`, restricting collection to
+  specific categories — a category outside the filter is never
+  requested from Appwrite at all, so a narrowly-scoped API key (e.g.
+  only `databases.read`/`tables.read`/`rows.read`, exactly what the
+  README recommends granting for a tables-only check) doesn't hit a
+  hard authorization failure on a category it was never granted and
+  never asked to check. Previously every command required all scopes
+  or failed completely, in direct tension with the README's own
+  least-privilege advice. `Inventory.Collected` records which
+  categories a run actually requested (persisted in manifests);
+  `amg inventory`'s terminal summary marks a skipped category
+  explicitly ("not requested — see --resources") instead of printing
+  an indistinguishable "0" a genuinely empty project would also show;
+  `compare.Result.CoverageMismatch()` (surfaced as a WARN note in
+  terminal/HTML output, separate from Findings) flags when source and
+  destination requested different categories, since a resource type
+  present on only the unfiltered side isn't real drift.
+  Self code-reviewed before landing; the review caught two real
+  issues, both fixed: `preflight`'s "No destination resource ID
+  conflicts" PASS gave no indication the check was narrowed by
+  `--resources`, so a real collision in an unchecked category would
+  have gone completely unflagged with an unqualified all-clear (fixed
+  by disclosing the requested categories in that PASS message); and
+  `--resources tables,tables` produced an `Inventory.Collected` with a
+  duplicate entry, which could spuriously trip `CoverageMismatch()`
+  against an equivalent run whose flag happened not to repeat itself
+  (fixed by deduping in `Options.withDefaults()`, not just at the CLI
+  flag-parsing layer, so any caller is protected).
+  Verified live against a real Appwrite Cloud project: `amg inventory
+  --resources=tables` and `--resources=bogus` (confirming the loud
+  configuration-error path) both behaved correctly; attempting to
+  provision a genuinely narrowly-scoped API key to prove the "avoids a
+  hard authorization failure" half live was blocked by a real Appwrite
+  Cloud constraint — API keys cannot be created from a request
+  authenticated with another API key (session-based console auth is
+  required), so that specific half rests on the httptest-level proof
+  in `TestCollect_ResourcesFilter_NeverRequestsExcludedCategories`
+  instead, which is disclosed here rather than left unstated.
 - `--timeout <duration>` on every live-network command (`doctor`,
   `inventory`, `snapshot`, `verify`, `preflight`) — the deadline was
   previously a hardcoded constant (10s-3min) with no override, a real

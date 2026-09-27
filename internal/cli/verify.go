@@ -30,6 +30,7 @@ func RunVerify(ctx context.Context, args []string, stdout, stderr io.Writer) int
 	concurrency := fs.Int("concurrency", inventory.DefaultConcurrency, "maximum concurrent Appwrite requests per side")
 	strict := fs.Bool("strict", false, "use the strict policy: an unexpected destination resource is BLOCK instead of WARN (see docs/comparison-model.md#policy)")
 	timeout := fs.Duration("timeout", verifyTimeout, "maximum time to allow the whole verify run — raise this for large projects that don't finish within the default")
+	resources := fs.String("resources", "", resourcesFlagHelp)
 	if err := fs.Parse(args); err != nil {
 		return exitForParseError(err)
 	}
@@ -49,7 +50,7 @@ func RunVerify(ctx context.Context, args []string, stdout, stderr io.Writer) int
 	runCtx, cancel := context.WithTimeout(ctx, *timeout)
 	defer cancel()
 
-	opts := inventory.Options{Concurrency: *concurrency, CountRows: !*noCounts, SampleRows: *sampleRows}
+	opts := inventory.Options{Concurrency: *concurrency, CountRows: !*noCounts, SampleRows: *sampleRows, Resources: parseResourcesFlag(*resources)}
 
 	var srcInv, dstInv *inventory.Inventory
 	var srcErr, dstErr error

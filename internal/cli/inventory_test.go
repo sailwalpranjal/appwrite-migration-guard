@@ -90,3 +90,73 @@ func TestRunInventory_SampleFailureDoesNotClaimCountFailure(t *testing.T) {
 		t.Fatalf("must not claim a row-count failure when only sampling failed:\n%s", out)
 	}
 }
+
+// TestRunInventory_ResourcesFlag_SkipsUnrequestedCategories is the
+// CLI-level regression guard for --resources: a real user running
+// `amg inventory --resources=tables` with an API key scoped only to
+// databases.read/tables.read/rows.read (exactly what the README
+// recommends granting for a tables-only check) must not hit a hard
+// authorization failure on /users, /functions, or /sites — because
+// those must never be requested at all when excluded.
+func TestRunInventory_ResourcesFlag_SkipsUnrequestedCategories(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/tablesdb":
+			json.NewEncoder(w).Encode(map[string]any{"total": 0, "databases": []any{}})
+		case "/users", "/functions", "/sites", "/storage/buckets":
+			t.Fatalf("category should have been excluded by --resources=tables: %s", r.URL.Path)
+		default:
+			w.WriteHeader(http.StatusNotFound)
+		}
+	}))
+	defer srv.Close()
+
+	withEnv(t, srv.URL, "proj1", "key1")
+	var stdout, stderr bytes.Buffer
+	code := RunInventory(context.Background(), []string{"--resources", "tables"}, &stdout, &stderr)
+	if code != ExitOK {
+		t.Fatalf("expected ExitOK, got %d; stdout:\n%s stderr:\n%s", code, stdout.String(), stderr.String())
+	}
+}
+
+// TestRunInventory_ResourcesFlag_MarksSkippedCategories is a regression
+// guard for a real ambiguity: without this, a category excluded via
+// --resources prints "0 bucket(s)" — visually identical to a genuinely
+// empty project — which misrepresents an intentionally narrowed run as
+// having confirmed "nothing here." Skipped categories must say so.
+func TestRunInventory_ResourcesFlag_MarksSkippedCategories(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/tablesdb" {
+			json.NewEncoder(w).Encode(map[string]any{"total": 0, "databases": []any{}})
+			return
+		}
+		w.WriteHeader(http.StatusNotFound)
+	}))
+	defer srv.Close()
+
+	withEnv(t, srv.URL, "proj1", "key1")
+	var stdout, stderr bytes.Buffer
+	code := RunInventory(context.Background(), []string{"--resources", "tables"}, &stdout, &stderr)
+	if code != ExitOK {
+		t.Fatalf("expected ExitOK for an intentionally narrowed run, got %d; stdout:\n%s", code, stdout.String())
+	}
+	out := stdout.String()
+	if !bytes.Contains([]byte(out), []byte("bucket(s) (not requested")) {
+		t.Fatalf("expected the bucket line to be marked as not requested, got:\n%s", out)
+	}
+	if bytes.Contains([]byte(out), []byte("database(s) (not requested")) {
+		t.Fatalf("the requested 'tables' category must not be marked as skipped, got:\n%s", out)
+	}
+}
+
+// TestRunInventory_ResourcesFlag_UnknownCategory_Blocks proves a typo
+// in --resources is a loud configuration error, not a silently-ignored
+// no-op that leaves a category unchecked without saying so.
+func TestRunInventory_ResourcesFlag_UnknownCategory_Blocks(t *testing.T) {
+	withEnv(t, "https://example.com/v1", "proj1", "key1")
+	var stdout, stderr bytes.Buffer
+	code := RunInventory(context.Background(), []string{"--resources", "table"}, &stdout, &stderr)
+	if code != ExitBlock {
+		t.Fatalf("expected ExitBlock for an unknown resource category, got %d", code)
+	}
+}

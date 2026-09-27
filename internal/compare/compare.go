@@ -90,8 +90,26 @@ type Result struct {
 	// produced a given BLOCK/WARN split — without it, a saved result had
 	// no record of the policy that produced it, making two
 	// differently-configured runs indistinguishable after the fact.
-	PolicyName string    `json:"policy_name"`
-	Findings   []Finding `json:"findings"`
+	PolicyName string `json:"policy_name"`
+	// SourceCollected/DestCollected record which resource categories
+	// (inventory.ResourceCategories) each side's inventory actually
+	// requested (see inventory.Options.Resources / --resources). When
+	// these differ, a "missing" resource type on one side may just mean
+	// it was never checked there — not that it's really absent — so
+	// CoverageMismatch surfaces that instead of leaving it to look like
+	// ordinary drift.
+	SourceCollected []string  `json:"source_collected"`
+	DestCollected   []string  `json:"dest_collected"`
+	Findings        []Finding `json:"findings"`
+}
+
+// CoverageMismatch reports whether the source and destination inventories
+// requested different resource categories (order-independent), which
+// means at least one side has category coverage the other doesn't — any
+// finding (or absence of one) touching that category isn't a reliable
+// signal.
+func (r *Result) CoverageMismatch() bool {
+	return !equalStringSets(r.SourceCollected, r.DestCollected)
 }
 
 // Overall returns the worst Severity across all findings, or
@@ -184,7 +202,10 @@ func Compare(sourceLabel string, source *inventory.Inventory, destLabel string, 
 // policy-dependent finding severities. See Policy's doc comment for why
 // this is deliberately narrow rather than a general severity-override map.
 func CompareWithPolicy(sourceLabel string, source *inventory.Inventory, destLabel string, dest *inventory.Inventory, policy Policy) *Result {
-	res := &Result{SchemaVersion: ResultSchemaVersion, SourceLabel: sourceLabel, DestLabel: destLabel, PolicyName: policy.Name}
+	res := &Result{
+		SchemaVersion: ResultSchemaVersion, SourceLabel: sourceLabel, DestLabel: destLabel, PolicyName: policy.Name,
+		SourceCollected: source.Collected, DestCollected: dest.Collected,
+	}
 
 	srcIdx := indexByKey(source)
 	dstIdx := indexByKey(dest)

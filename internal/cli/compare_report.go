@@ -31,6 +31,12 @@ func writeCompareTerminal(w io.Writer, title string, res *compare.Result) {
 	fmt.Fprintf(w, "Policy:      %s\n", res.PolicyName)
 	fmt.Fprintln(w)
 
+	if res.CoverageMismatch() {
+		fmt.Fprintf(w, "WARN  source and destination requested different resource categories (--resources): source=%v dest=%v\n", res.SourceCollected, res.DestCollected)
+		fmt.Fprintln(w, "      a category present on only one side won't produce a reliable missing/unexpected finding for that category.")
+		fmt.Fprintln(w)
+	}
+
 	if len(res.Findings) == 0 {
 		fmt.Fprintf(w, "%-5s no differences found\n", StatusPass)
 	}
