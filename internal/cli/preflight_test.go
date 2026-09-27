@@ -33,6 +33,8 @@ func preflightServer(t *testing.T, version string, databaseIDs []string) *httpte
 			json.NewEncoder(w).Encode(map[string]any{"total": 0, "users": []any{}})
 		case "/functions":
 			json.NewEncoder(w).Encode(map[string]any{"total": 0, "functions": []any{}})
+		case "/sites":
+			json.NewEncoder(w).Encode(map[string]any{"total": 0, "sites": []any{}})
 		default:
 			if strings.HasPrefix(r.URL.Path, "/tablesdb/") && strings.HasSuffix(r.URL.Path, "/tables") {
 				json.NewEncoder(w).Encode(map[string]any{"total": 0, "tables": []any{}})
@@ -56,7 +58,10 @@ func TestRunPreflight_MissingConfig(t *testing.T) {
 // cannot inspect legacy Databases/Users/Functions/Sites for conflicts
 // either, rather than staying silent about that blind spot (spec
 // section 19: "resource types that may require manual handling").
-func TestRunPreflight_NoConflicts_WarnsAboutUnsupportedTypes(t *testing.T) {
+// Now that every original-spec resource type is inventoried,
+// Inventory.Unsupported is empty and preflight no longer has anything to
+// warn about when there are no ID conflicts — a clean PASS, not noise.
+func TestRunPreflight_NoConflicts_Pass(t *testing.T) {
 	src := preflightServer(t, "2.3.0", []string{"db-a"})
 	defer src.Close()
 	dst := preflightServer(t, "2.3.0", []string{"db-b"})
@@ -65,14 +70,14 @@ func TestRunPreflight_NoConflicts_WarnsAboutUnsupportedTypes(t *testing.T) {
 
 	var stdout, stderr bytes.Buffer
 	code := RunPreflight(context.Background(), nil, &stdout, &stderr)
-	if code != ExitWarn {
-		t.Fatalf("expected ExitWarn, got %d; stdout:\n%s stderr:\n%s", code, stdout.String(), stderr.String())
+	if code != ExitOK {
+		t.Fatalf("expected ExitOK, got %d; stdout:\n%s stderr:\n%s", code, stdout.String(), stderr.String())
 	}
 	if !bytes.Contains(stdout.Bytes(), []byte("No destination resource ID conflicts")) {
 		t.Fatalf("expected a no-conflicts line in output:\n%s", stdout.String())
 	}
-	if !bytes.Contains(stdout.Bytes(), []byte("Resource types requiring manual verification")) {
-		t.Fatalf("expected a manual-verification warning in output:\n%s", stdout.String())
+	if bytes.Contains(stdout.Bytes(), []byte("Resource types requiring manual verification")) {
+		t.Fatalf("did not expect a manual-verification warning now that Unsupported is empty:\n%s", stdout.String())
 	}
 }
 

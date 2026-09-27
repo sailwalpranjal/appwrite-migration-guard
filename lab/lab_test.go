@@ -67,6 +67,8 @@ func emptyProjectHandler(overrides map[string]http.HandlerFunc) http.HandlerFunc
 			json.NewEncoder(w).Encode(map[string]any{"total": 0, "users": []any{}})
 		case "/functions":
 			json.NewEncoder(w).Encode(map[string]any{"total": 0, "functions": []any{}})
+		case "/sites":
+			json.NewEncoder(w).Encode(map[string]any{"total": 0, "sites": []any{}})
 		default:
 			w.WriteHeader(http.StatusNotFound)
 		}

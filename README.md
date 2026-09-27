@@ -8,21 +8,23 @@
 > verified against a live Appwrite Cloud project, covering TablesDB
 > (databases/tables/rows, with opt-in sampled row *content* verification
 > via `--sample-rows`), Storage (buckets/files, with file
-> content-integrity checks via MD5 signature), Users and Functions
-> (administrative/config state only — see [Limitations](#limitations)
-> for exactly what's excluded and why, including a live test proving a
-> real password hash and a real env-var-shaped secret never reach a
-> manifest), and HTML/JSON/text reporting. Deliberately introduced a
-> permission change, a config change, a deleted table, changed file
-> content, a changed row's content, and a destination resource ID
-> collision, and confirmed amg caught every one of them. What's still
-> missing is *breadth*, not depth: legacy Databases
-> (collections/documents) and Sites aren't inventoried yet (explicitly
-> marked `UNSUPPORTED`, never silently skipped). The original roadmap's
-> 8 items are now all done, including a fault-injection lab (`lab/`,
-> runs in CI) and validated release automation — see
-> [Roadmap](#roadmap). This README describes what exists today, not a
-> finished, battle-tested product: it's pre-alpha, verified but young.
+> content-integrity checks via MD5 signature), Users, Functions, and
+> Sites (administrative/config state only — see
+> [Limitations](#limitations) for exactly what's excluded and why,
+> including a live test proving a real password hash and a real
+> env-var-shaped secret never reach a manifest), and HTML/JSON/text
+> reporting. Every resource type from the original spec is now
+> inventoried — including legacy Databases (collections/documents),
+> which needed no separate collector: verified live that the legacy API
+> reads the identical underlying data TablesDB does. Deliberately
+> introduced a permission change, a config change, a deleted table,
+> changed file content, a changed row's content, and a destination
+> resource ID collision, and confirmed amg caught every one of them. The
+> original roadmap's 8 items are now all done, including a
+> fault-injection lab (`lab/`, runs in CI) and validated release
+> automation — see [Roadmap](#roadmap). This README describes what
+> exists today, not a finished, battle-tested product: it's pre-alpha,
+> verified but young.
 
 ## The problem
 
@@ -271,7 +273,7 @@ go test ./...
 All claims of "supported" or "tested" in this repository are backed by the
 tests in the corresponding package — see `*_test.go` files next to the
 code they test. Beyond mocked-HTTP tests, amg's core loop has been run
-seven times against a live Appwrite Cloud project. TablesDB: create a
+nine times against a live Appwrite Cloud project. TablesDB: create a
 database + table, snapshot it as "source", change its permissions and a
 config flag, snapshot again as "destination", `amg compare` the two
 manifests (correctly reported both changes and nothing else), delete the
@@ -307,8 +309,14 @@ response included an explicit `"vars":[]` field, confirming the shape
 amg's exclusion is designed against), snapshotted as "source", changed
 its schedule and execute permissions, snapshotted as "destination" —
 `amg compare` correctly reported both changes, and grepping both
-manifests for `vars`/secret-shaped strings found nothing. All test
-resources were deleted afterward.
+manifests for `vars`/secret-shaped strings found nothing. Sites: created
+a real site, snapshotted, changed its logging flag/build command/output
+directory, snapshotted again — `amg compare` correctly reported all
+three changes with no `vars` leakage. Legacy Databases: created a
+database via `POST /v1/tablesdb`, fetched it via `GET /v1/databases`
+(the legacy list endpoint) and confirmed the response was byte-for-byte
+identical — proving amg needs no separate legacy collector, not just
+inferring it from source. All test resources were deleted afterward.
 
 ## Migration lab
 
@@ -349,17 +357,19 @@ every push (`.github/workflows/ci.yml`).
   *why* it's there or whether that's actually a problem for your specific
   migration.
 - Inventory (and therefore comparison) covers TablesDB
-  (databases/tables/row counts), Storage (buckets/files), Users, and
-  Functions. Legacy Databases (collections/documents) and Sites are
-  explicitly marked `UNSUPPORTED`, not silently skipped — see
-  [docs/migration-semantics.md](docs/migration-semantics.md).
-- Function comparison is config-only (runtime, schedule, timeout,
-  execute permissions, ...) — amg has no way to know whether a
-  function's actual *code* behaves the same after a migration, only
-  whether its configuration matches. Environment variables (`vars`) are
-  never collected at all: Appwrite's own model documents them as
-  routinely holding secrets, and `appwrite.Function` has no field for
-  them to decode into.
+  (databases/tables/row counts), Storage (buckets/files), Users,
+  Functions, and Sites — every resource type from the original spec.
+  Legacy Databases (collections/documents) needed no separate collector:
+  see [docs/migration-semantics.md](docs/migration-semantics.md) for the
+  live + source-code verification, including one caveat that wasn't
+  reproduced live (a scope limitation, not a data-shape doubt).
+- Function and Site comparison is config-only (runtime/framework,
+  schedule, timeout, build commands, ...) — amg has no way to know
+  whether the actual *code* behaves the same after a migration, only
+  whether configuration matches. Environment variables (`vars`) are
+  never collected at all for either: Appwrite's own model documents them
+  as routinely holding secrets, and neither `appwrite.Function` nor
+  `appwrite.Site` has a field for them to decode into.
 - User inventory is deliberately narrow: only administrative/verification
   state (enabled/disabled, email/phone verification flags, MFA, labels).
   amg never collects or compares a user's email, phone number, or prefs
@@ -396,8 +406,11 @@ every push (`.github/workflows/ci.yml`).
    verification)~~ — done. ~~Opt-in TablesDB row content verification
    (`--sample-rows`, addressing the "counts only" limitation)~~ — done.
    ~~Users inventory (administrative state only)~~ — done. ~~Functions
-   inventory (config only, never env vars)~~ — done. Still open: legacy
-   Databases (collections/documents), Sites.
+   inventory (config only, never env vars)~~ — done. ~~Sites inventory
+   (config only, never env vars)~~ — done. ~~Legacy Databases
+   (collections/documents)~~ — confirmed to need no separate collector
+   (see docs/migration-semantics.md). Every original-spec resource type
+   is now inventoried.
 6. ~~Static HTML reporting (`amg report`)~~ — done, alongside JSON/text.
 7. ~~Fault-injection migration lab + CI~~ — done (`lab/`, runs in CI on
    every push, `gofmt`/`go vet`/`go test -race`/`go build`).
