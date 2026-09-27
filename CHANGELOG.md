@@ -5,7 +5,44 @@ follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
-Nothing yet.
+### Added
+
+- `docs/acceptance-test-fixture.md`: a standing, realistic mid-sized
+  Appwrite Cloud project ("TaskFlow" — 1 database/3 tables/11
+  columns/3 indexes/9 rows, a storage bucket with 2 files, 3 users, 1
+  function, 1 site) provisioned via the real API and kept in place (not
+  torn down) as a reusable acceptance-test fixture for future
+  regression passes. Full doctor/inventory/preflight/verify baseline
+  and a 10-mutation regression batch run against it: every expected
+  finding (`schema_changed`, `permission_changed`, `row_content_changed`,
+  `missing_resource`, `content_changed`, `name_changed`,
+  `config_changed` x3, `row_count_mismatch`, `row_sample_unexpected`,
+  `unexpected_resource`) fired correctly and nothing else did — see the
+  Testing section of README.md for the row-by-row results and the new
+  doc for the reproducible walkthrough.
+- `compare.Result.AmbiguousLabels()`: flags when the source and
+  destination manifests carry the same label (most commonly, both left
+  at `amg snapshot`'s "target" default because `--label` was never
+  passed). `amg compare`'s terminal output, JSON-driven HTML report,
+  and `amg report` now print an explicit advisory in that case, instead
+  of leaving every affected message unreadable — e.g. a
+  `missing_resource` finding previously read as `exists in target but
+  is missing in target` with no way to tell which side was which.
+  Reproduced live against the TaskFlow fixture (two manifests both
+  snapshotted without `--label`) before being fixed.
+
+### Fixed
+
+- `amg doctor`/`amg preflight`: a `Client.Version()` failure caused by
+  Appwrite Cloud's regional routing (a valid project/key pointed at the
+  wrong region's endpoint, e.g. `fra` instead of the project's actual
+  `nyc`) previously surfaced as a bare `401` under the "Endpoint
+  reachable" check. Reproduced live: Appwrite's own error message
+  already names the cause ("Project is not accessible in this
+  region..."), but nothing pointed at the fix. `explainReachabilityError`
+  now appends a concrete next step (copy the exact endpoint from the
+  project's Overview page) whenever this specific, unauthenticated-401
+  pattern is detected.
 
 ## [0.1.0] - 2026-09-27
 

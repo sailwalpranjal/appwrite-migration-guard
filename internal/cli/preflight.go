@@ -87,7 +87,7 @@ func RunPreflight(ctx context.Context, args []string, stdout, stderr io.Writer) 
 func checkReachable(ctx context.Context, list *Checklist, label string, client *appwrite.Client) (version string, ok bool) {
 	v, err := client.Version(ctx)
 	if err != nil {
-		list.Block(label+" endpoint reachable", explain(err))
+		list.Block(label+" endpoint reachable", explainReachabilityError(err))
 		return "", false
 	}
 	list.Pass(fmt.Sprintf("%s endpoint reachable (Appwrite %s)", label, v.Version))

@@ -112,6 +112,21 @@ func (r *Result) CoverageMismatch() bool {
 	return !equalStringSets(r.SourceCollected, r.DestCollected)
 }
 
+// AmbiguousLabels reports whether the source and destination manifests
+// carry the same label (e.g. both left at `amg snapshot`'s "target"
+// default because --label was never passed). It doesn't change what was
+// compared, but every message that names a side by label — including
+// "exists in X but is missing in X" for a missing_resource finding —
+// becomes unreadable when both sides share one, so callers use this to
+// print an advisory pointing at the fix (--label source/--label
+// destination), the same way CoverageMismatch flags a different
+// footgun. Reproduced live: comparing two manifests both snapshotted
+// without --label produces exactly that "in target but is missing in
+// target" wording.
+func (r *Result) AmbiguousLabels() bool {
+	return r.SourceLabel == r.DestLabel
+}
+
 // Overall returns the worst Severity across all findings, or
 // SeverityPass if there are none. Unlike cli.Checklist (used for
 // operational checks like `doctor`), an empty Findings list here

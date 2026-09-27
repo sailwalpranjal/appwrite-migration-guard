@@ -107,6 +107,32 @@ func TestCompare_CoverageMismatch_FalseWhenSame(t *testing.T) {
 	}
 }
 
+// TestCompare_AmbiguousLabels_DetectedWhenBothDefault is a regression
+// guard for a real usability bug reproduced live: `amg snapshot` without
+// --label always writes "target", so two manifests captured without
+// --label produce messages like `exists in target but is missing in
+// target` — unreadable. AmbiguousLabels must flag this so callers can
+// print an advisory the way CoverageMismatch already does.
+func TestCompare_AmbiguousLabels_DetectedWhenBothDefault(t *testing.T) {
+	src := inv(table("t1", "db1", "Widgets", nil, nil, 5))
+	dst := inv()
+
+	res := Compare("target", src, "target", dst)
+	if !res.AmbiguousLabels() {
+		t.Fatal("expected AmbiguousLabels to be true when both sides share a label")
+	}
+}
+
+func TestCompare_AmbiguousLabels_FalseWhenDistinct(t *testing.T) {
+	src := inv(table("t1", "db1", "Widgets", nil, nil, 5))
+	dst := inv(table("t1", "db1", "Widgets", nil, nil, 5))
+
+	res := Compare("source", src, "destination", dst)
+	if res.AmbiguousLabels() {
+		t.Fatal("expected AmbiguousLabels to be false for distinct labels")
+	}
+}
+
 // Scenario A (spec section 33): destination missing a resource -> BLOCK.
 func TestCompare_MissingResource_Blocks(t *testing.T) {
 	src := inv(table("t1", "db1", "Widgets", nil, nil, 5))

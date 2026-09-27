@@ -248,6 +248,15 @@ const htmlTemplateSource = `<!doctype html>
   </p>
   {{end}}
 
+  {{if .Result.AmbiguousLabels}}
+  <p class="badge badge-WARN" style="display:block;margin-top:12px">
+    Source and destination manifests both carry the label
+    &quot;{{.Result.SourceLabel}}&quot;. Findings below can't distinguish
+    the two sides by name &mdash; re-run <code>amg snapshot --label
+    source</code> / <code>--label destination</code> for clearer output.
+  </p>
+  {{end}}
+
   {{if .ByResource}}
   <table class="breakdown">
     <caption>Findings by resource type (PASS is never listed here — an unaffected resource type produces no rows, not a "0" row).</caption>

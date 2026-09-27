@@ -6,6 +6,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"strings"
 	"time"
 
 	"github.com/sailwalpranjal/appwrite-migration-guard/internal/appwrite"
@@ -45,7 +46,7 @@ func RunDoctor(ctx context.Context, args []string, stdout, stderr io.Writer) int
 
 	v, err := client.Version(runCtx)
 	if err != nil {
-		list.Block("Endpoint reachable", explain(err))
+		list.Block("Endpoint reachable", explainReachabilityError(err))
 		return finishChecklist(&list, "doctor", "Appwrite Migration Guard — doctor", *jsonOut, stdout, stderr)
 	}
 	list.Pass(fmt.Sprintf("Endpoint reachable (Appwrite %s)", v.Version))
@@ -82,6 +83,23 @@ func finishChecklist(list *Checklist, command, title string, jsonOut bool, stdou
 // error text (they are sent only as headers), so this is a plain format.
 func explain(err error) string {
 	return err.Error()
+}
+
+// explainReachabilityError renders a Client.Version() failure with a
+// specific hint when the error is Appwrite Cloud's regional-routing 401
+// ("Project is not accessible in this region..."), rather than a bare
+// error string. Version() never sends the API key (see requestAuth's doc
+// comment), so a 401 here is essentially never a credentials problem —
+// verified live against Appwrite Cloud 2.3.0 by pointing a valid
+// project/key pair at the wrong region's endpoint (e.g. fra instead of
+// nyc), which reproduces exactly this response. Appwrite's own message
+// already names the cause; this only adds the concrete fix.
+func explainReachabilityError(err error) string {
+	msg := explain(err)
+	if errs.IsKind(err, errs.KindAuthentication) && strings.Contains(strings.ToLower(msg), "region") {
+		return msg + " — APPWRITE_ENDPOINT most likely points at the wrong Appwrite Cloud region for this project (e.g. fra vs nyc vs syd); open the project's Overview page in the Appwrite console and copy its API Endpoint exactly."
+	}
+	return msg
 }
 
 // explainAuthError renders a Client.Health() failure with a specific,
