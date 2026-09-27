@@ -7,6 +7,10 @@ follows [Keep a Changelog](https://keepachangelog.com/).
 
 ### Added
 
+- `--timeout <duration>` on every live-network command (`doctor`,
+  `inventory`, `snapshot`, `verify`, `preflight`) — the deadline was
+  previously a hardcoded constant (10s-3min) with no override, a real
+  gap for a tool meant to run against arbitrarily large real projects.
 - Two `lab/` fault-injection scenarios modeled on real Appwrite bugs:
   a table that loses a column mid-migration (appwrite/appwrite#12770)
   now triggers `schema_changed`, and a masked server validation error
@@ -130,6 +134,27 @@ follows [Keep a Changelog](https://keepachangelog.com/).
 
 ### Fixed
 
+- `.goreleaser.yaml` used `release.prerelease: auto`, which only marks a
+  tag as a GitHub prerelease when the tag itself has a semver
+  pre-release suffix (e.g. `v0.1.0-rc1`) — a plain `v0.1.0` tag, the
+  natural first release name, would NOT have been marked prerelease,
+  contradicting the project's own stated pre-alpha status. Changed to
+  `prerelease: true`, which forces it regardless of tag format.
+  Re-validated the full release process against the current codebase:
+  `goreleaser check` (config valid), `goreleaser build --snapshot`
+  (all 5 targets compile), `goreleaser release --snapshot --skip=publish`
+  (archives + checksums produced correctly, including README/LICENSE/
+  CHANGELOG/.env.example in each archive) — then ran the resulting
+  Windows binary directly and confirmed `amg version` reports the
+  correct injected version/commit/date.
+- `amg verify --json > result.json` followed by `amg report result.json`
+  failed on Windows PowerShell: `>` redirection writes UTF-8 with a
+  leading byte-order mark, which `encoding/json` treats as invalid.
+  Found by running the documented workflow end-to-end on real Windows
+  PowerShell against a live project, not synthetically. Fixed by
+  tolerating a leading BOM in every file amg reads: `manifest.Read`,
+  `report`'s result reader, and `config.LoadDotEnv` (a BOM-prefixed
+  `.env`, e.g. from Notepad, silently broke the first variable's key).
 - `TestWrite_DeterministicAsideFromRunIDAndTimestamp` was flaky on
   Linux: it built two `inventory.Inventory` values via separate
   `inventory.New()` calls, each stamping its own `GeneratedAt` via
