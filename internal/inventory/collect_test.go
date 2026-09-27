@@ -47,6 +47,8 @@ func fakeServer(t *testing.T, onRowCount func(databaseID, tableID string) (int, 
 			json.NewEncoder(w).Encode(map[string]any{"total": 0, "buckets": []any{}})
 		case r.URL.Path == "/users":
 			json.NewEncoder(w).Encode(map[string]any{"total": 0, "users": []any{}})
+		case r.URL.Path == "/functions":
+			json.NewEncoder(w).Encode(map[string]any{"total": 0, "functions": []any{}})
 		case strings.HasSuffix(r.URL.Path, "/rows"):
 			parts := strings.Split(r.URL.Path, "/")
 			// /tablesdb/{db}/tables/{table}/rows

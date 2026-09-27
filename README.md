@@ -8,16 +8,18 @@
 > verified against a live Appwrite Cloud project, covering TablesDB
 > (databases/tables/rows, with opt-in sampled row *content* verification
 > via `--sample-rows`), Storage (buckets/files, with file
-> content-integrity checks via MD5 signature), Users (administrative
-> state only — see [Limitations](#limitations) for exactly what's
-> excluded and why), and HTML/JSON/text reporting. Deliberately
-> introduced a permission change, a config change, a deleted table,
-> changed file content, a changed row's content, and a destination
-> resource ID collision, and confirmed amg caught every one of them.
-> What's still missing is *breadth*, not depth: legacy Databases
-> (collections/documents)/Functions/Sites aren't inventoried yet
-> (explicitly marked `UNSUPPORTED`, never silently skipped), and there's
-> no fault-injection lab or release binaries yet — see
+> content-integrity checks via MD5 signature), Users and Functions
+> (administrative/config state only — see [Limitations](#limitations)
+> for exactly what's excluded and why, including a live test proving a
+> real password hash and a real env-var-shaped secret never reach a
+> manifest), and HTML/JSON/text reporting. Deliberately introduced a
+> permission change, a config change, a deleted table, changed file
+> content, a changed row's content, and a destination resource ID
+> collision, and confirmed amg caught every one of them. What's still
+> missing is *breadth*, not depth: legacy Databases
+> (collections/documents) and Sites aren't inventoried yet (explicitly
+> marked `UNSUPPORTED`, never silently skipped), and there's no
+> fault-injection lab or release binaries yet — see
 > [Roadmap](#roadmap). This README describes what exists today, not the
 > finished product.
 
@@ -259,7 +261,7 @@ go test ./...
 All claims of "supported" or "tested" in this repository are backed by the
 tests in the corresponding package — see `*_test.go` files next to the
 code they test. Beyond mocked-HTTP tests, amg's core loop has been run
-six times against a live Appwrite Cloud project. TablesDB: create a
+seven times against a live Appwrite Cloud project. TablesDB: create a
 database + table, snapshot it as "source", change its permissions and a
 config flag, snapshot again as "destination", `amg compare` the two
 manifests (correctly reported both changes and nothing else), delete the
@@ -290,8 +292,13 @@ and grepped the output for the hash/email/phone — zero matches, confirmed
 absent from both the JSON and the saved manifest file. Disabled the user
 and added a label, snapshotted again, and `amg compare` correctly
 reported both changes (`enabled`, `labels`) with no PII anywhere in
-either manifest. All test resources were deleted
-afterward.
+either manifest. Functions: created a real function (whose raw Appwrite
+response included an explicit `"vars":[]` field, confirming the shape
+amg's exclusion is designed against), snapshotted as "source", changed
+its schedule and execute permissions, snapshotted as "destination" —
+`amg compare` correctly reported both changes, and grepping both
+manifests for `vars`/secret-shaped strings found nothing. All test
+resources were deleted afterward.
 
 ## Migration lab
 
@@ -311,10 +318,17 @@ prove amg's comparison engine actually detects real problems — see
   *why* it's there or whether that's actually a problem for your specific
   migration.
 - Inventory (and therefore comparison) covers TablesDB
-  (databases/tables/row counts), Storage (buckets/files), and Users.
-  Legacy Databases (collections/documents), Functions, and Sites are
+  (databases/tables/row counts), Storage (buckets/files), Users, and
+  Functions. Legacy Databases (collections/documents) and Sites are
   explicitly marked `UNSUPPORTED`, not silently skipped — see
   [docs/migration-semantics.md](docs/migration-semantics.md).
+- Function comparison is config-only (runtime, schedule, timeout,
+  execute permissions, ...) — amg has no way to know whether a
+  function's actual *code* behaves the same after a migration, only
+  whether its configuration matches. Environment variables (`vars`) are
+  never collected at all: Appwrite's own model documents them as
+  routinely holding secrets, and `appwrite.Function` has no field for
+  them to decode into.
 - User inventory is deliberately narrow: only administrative/verification
   state (enabled/disabled, email/phone verification flags, MFA, labels).
   amg never collects or compares a user's email, phone number, or prefs
@@ -350,8 +364,9 @@ prove amg's comparison engine actually detects real problems — see
 5. ~~Inventory + comparison for Storage (buckets/files, MD5 content
    verification)~~ — done. ~~Opt-in TablesDB row content verification
    (`--sample-rows`, addressing the "counts only" limitation)~~ — done.
-   ~~Users inventory (administrative state only)~~ — done. Still open:
-   legacy Databases (collections/documents), Functions, Sites.
+   ~~Users inventory (administrative state only)~~ — done. ~~Functions
+   inventory (config only, never env vars)~~ — done. Still open: legacy
+   Databases (collections/documents), Sites.
 6. ~~Static HTML reporting (`amg report`)~~ — done, alongside JSON/text.
 7. Fault-injection migration lab + CI.
 8. Cross-platform release binaries.

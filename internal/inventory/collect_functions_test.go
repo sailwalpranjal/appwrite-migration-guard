@@ -8,7 +8,7 @@ import (
 	"testing"
 )
 
-func usersOnlyServer(t *testing.T, users []map[string]any) *httptest.Server {
+func functionsOnlyServer(t *testing.T, fns []map[string]any) *httptest.Server {
 	t.Helper()
 	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
@@ -17,18 +17,18 @@ func usersOnlyServer(t *testing.T, users []map[string]any) *httptest.Server {
 		case "/storage/buckets":
 			json.NewEncoder(w).Encode(map[string]any{"total": 0, "buckets": []any{}})
 		case "/users":
-			json.NewEncoder(w).Encode(map[string]any{"total": len(users), "users": users})
+			json.NewEncoder(w).Encode(map[string]any{"total": 0, "users": []any{}})
 		case "/functions":
-			json.NewEncoder(w).Encode(map[string]any{"total": 0, "functions": []any{}})
+			json.NewEncoder(w).Encode(map[string]any{"total": len(fns), "functions": fns})
 		default:
 			w.WriteHeader(http.StatusNotFound)
 		}
 	}))
 }
 
-func TestCollect_UsersPopulated(t *testing.T) {
-	srv := usersOnlyServer(t, []map[string]any{
-		{"$id": "u1", "name": "Alice", "status": true, "emailVerification": true, "labels": []string{"vip"}},
+func TestCollect_FunctionsPopulated(t *testing.T) {
+	srv := functionsOnlyServer(t, []map[string]any{
+		{"$id": "fn1", "name": "SendEmail", "enabled": true, "runtime": "node-18.0", "execute": []string{"users"}},
 	})
 	defer srv.Close()
 
@@ -38,25 +38,28 @@ func TestCollect_UsersPopulated(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	var user *Resource
+	var fn *Resource
 	for i := range inv.Resources {
-		if inv.Resources[i].Type == ResourceUser {
-			user = &inv.Resources[i]
+		if inv.Resources[i].Type == ResourceFunction {
+			fn = &inv.Resources[i]
 		}
 	}
-	if user == nil {
-		t.Fatal("expected a user resource")
+	if fn == nil {
+		t.Fatal("expected a function resource")
 	}
-	if user.Name != "Alice" {
-		t.Fatalf("unexpected name: %q", user.Name)
+	if fn.Name != "SendEmail" {
+		t.Fatalf("unexpected name: %q", fn.Name)
 	}
-	if user.Metadata["enabled"] != true {
-		t.Fatalf("unexpected enabled: %v", user.Metadata["enabled"])
+	if fn.Metadata["runtime"] != "node-18.0" {
+		t.Fatalf("unexpected runtime: %v", fn.Metadata["runtime"])
+	}
+	if len(fn.Permissions) != 1 || fn.Permissions[0] != "users" {
+		t.Fatalf("unexpected execute permissions: %v", fn.Permissions)
 	}
 }
 
-func TestCollect_UsersIsNoLongerUnsupported(t *testing.T) {
-	srv := usersOnlyServer(t, nil)
+func TestCollect_FunctionsIsNoLongerUnsupported(t *testing.T) {
+	srv := functionsOnlyServer(t, nil)
 	defer srv.Close()
 
 	client := newTestClient(srv.URL)
@@ -65,13 +68,13 @@ func TestCollect_UsersIsNoLongerUnsupported(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	for _, u := range inv.Unsupported {
-		if u == "users" {
-			t.Fatal("users should no longer be listed as unsupported")
+		if u == "functions" {
+			t.Fatal("functions should no longer be listed as unsupported")
 		}
 	}
 }
 
-func TestCollect_ListUsersFailureAborts(t *testing.T) {
+func TestCollect_ListFunctionsFailureAborts(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case "/tablesdb":
@@ -79,6 +82,8 @@ func TestCollect_ListUsersFailureAborts(t *testing.T) {
 		case "/storage/buckets":
 			json.NewEncoder(w).Encode(map[string]any{"total": 0, "buckets": []any{}})
 		case "/users":
+			json.NewEncoder(w).Encode(map[string]any{"total": 0, "users": []any{}})
+		case "/functions":
 			w.WriteHeader(http.StatusForbidden)
 			json.NewEncoder(w).Encode(map[string]any{"message": "forbidden", "code": 403})
 		}
@@ -88,6 +93,6 @@ func TestCollect_ListUsersFailureAborts(t *testing.T) {
 	client := newTestClient(srv.URL)
 	_, err := Collect(context.Background(), client, srv.URL, "proj1", Options{})
 	if err == nil {
-		t.Fatal("expected an error when ListUsers fails")
+		t.Fatal("expected an error when ListFunctions fails")
 	}
 }

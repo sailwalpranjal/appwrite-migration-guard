@@ -26,6 +26,8 @@ func storageOnlyServer(t *testing.T, buckets []map[string]any, filesByBucket map
 			json.NewEncoder(w).Encode(map[string]any{"total": len(files), "files": files})
 		case r.URL.Path == "/users":
 			json.NewEncoder(w).Encode(map[string]any{"total": 0, "users": []any{}})
+		case r.URL.Path == "/functions":
+			json.NewEncoder(w).Encode(map[string]any{"total": 0, "functions": []any{}})
 		default:
 			w.WriteHeader(http.StatusNotFound)
 		}

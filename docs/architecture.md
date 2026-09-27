@@ -71,6 +71,10 @@ A narrow REST client, not a general SDK:
   `hashOptions`/`email`/`phone`/`prefs`, so `json.Unmarshal` silently
   drops them even if Appwrite's raw response includes them — there is
   nothing for that data to decode into. See docs/migration-semantics.md.
+- `functions.go` — `ListFunctions`. Same pattern: `Function` has no field
+  for `vars` (function environment variables, which routinely hold
+  secrets), so they are never decoded regardless of what the raw
+  response contains.
 
 Every endpoint path and header this package uses is annotated with the
 exact file in `github.com/appwrite/appwrite` (tag `2.3.0`) it was verified
@@ -160,7 +164,7 @@ release build time; defaults to `"dev"` for local builds.
 ## What is deliberately not here yet
 
 No inventory (and therefore no comparison) of legacy Databases
-(collections/documents)/Functions/Sites, no exhaustive (non-sampled)
-row content comparison, no fault-injection migration lab, no persistent
-run history beyond the manifest/result files a user explicitly saves.
-These are staged work — see the README roadmap.
+(collections/documents) or Sites, no exhaustive (non-sampled) row
+content comparison, no fault-injection migration lab, no persistent run
+history beyond the manifest/result files a user explicitly saves. These
+are staged work — see the README roadmap.
