@@ -538,6 +538,16 @@ every push (`.github/workflows/ci.yml`).
 8. ~~Cross-platform release binaries~~ — done: see
    [releases](https://github.com/sailwalpranjal/appwrite-migration-guard/releases).
 
+## Product thinking
+
+How I would run this as a product, written after the build:
+
+- [PRD](docs/product/PRD.md): problem, user, goals, non-goals, acceptance criteria, risks
+- [Roadmap](docs/product/ROADMAP.md): Now / Next / Later with RICE and ICE arithmetic (the list above records what is done; this is what I would do next)
+- [Decision log](docs/product/DECISIONS.md): six decisions visible in the code, such as PASS/WARN/BLOCK instead of a score
+- [Metrics plan](docs/product/METRICS.md): opt-in signals only; amg has no telemetry
+- [Project board setup](docs/project-board.md), [issue drafts](docs/issues/)
+
 ## Contributing
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) and the
