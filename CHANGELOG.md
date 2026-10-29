@@ -5,6 +5,8 @@ follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+## [0.2.0] - proposed tag `v0.2.0`
+
 ### Added
 
 - `docs/acceptance-test-fixture.md`: a standing, realistic mid-sized
@@ -43,6 +45,12 @@ follows [Keep a Changelog](https://keepachangelog.com/).
   now appends a concrete next step (copy the exact endpoint from the
   project's Overview page) whenever this specific, unauthenticated-401
   pattern is detected.
+
+### Documentation
+
+- Product documents under `docs/product/`: a retrospective PRD, a Now/Next/Later roadmap with RICE and ICE arithmetic, a decision log, and a metrics plan that adds no telemetry.
+- `docs/project-board.md`, `scripts/create-labels.sh`, a feature request template, `docs/github-metadata.md` and four issue drafts in `docs/issues/`.
+- README links the product documents; wording tightened in the README and `CONTRIBUTING.md`.
 
 ## [0.1.0] - 2026-09-27
 
