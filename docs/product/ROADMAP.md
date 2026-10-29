@@ -10,7 +10,7 @@ The README roadmap is a list of what has been done. This one is what I would do 
 |---|---|---|
 | Run the acceptance fixture against a self-hosted Appwrite version | Only Appwrite Cloud 2.3.0 has been tested, and many migrations start from self-hosted | RICE: 7 x 2 x 0.6 / 2 = **4.2** |
 | Make the sample window configurable beyond "first N by `$id`" (for example, evenly spaced rows) | The biggest listed false negative is a changed row outside the window | RICE: 6 x 2 x 0.7 / 2 = **4.2** |
-| Add a `--fail-on warn` exit-code option | CI users need to decide whether WARN fails a pipeline | ICE: (6 + 9 + 9) / 3 = **8.0** |
+| Add a `--fail-on block` option so WARN can exit 0 | WARN exits 1 today, which fails most CI steps | ICE: (6 + 9 + 9) / 3 = **8.0** |
 | Publish a one-page "migration checklist" that shows where amg fits | The README explains the tool; it does not show the surrounding steps | ICE: (5 + 8 + 9) / 3 = **7.3** |
 
 ## Next
