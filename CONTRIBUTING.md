@@ -1,7 +1,7 @@
 # Contributing
 
 Appwrite Migration Guard is a solo-maintained, dependency-light Go
-project. Contributions are welcome, especially:
+project. The most useful things to send:
 
 - Verified Appwrite API behavior (with a link to the source/docs you
   checked) for resource types not yet covered.
@@ -19,10 +19,10 @@ project. Contributions are welcome, especially:
   library first. If a dependency is genuinely needed, say why in the PR
   description.
 - **Every behavioral change needs a test.** Especially normalization
-  rules — an "expected transformation" rule without a test explaining
+  rules, an "expected transformation" rule without a test explaining
   *why* it's expected will be rejected.
 - **No AI/ML features.** This is a deliberate project boundary, not an
-  oversight — see the README's "What amg is not" section.
+  oversight, see the README's "What amg is not" section.
 
 ## Local development
 
@@ -37,7 +37,7 @@ go test -race ./...
 
 Releases are built by [GoReleaser](https://goreleaser.com) via
 `.github/workflows/release.yml`, triggered by pushing a tag matching
-`vX.Y.Z`. There is no manual release process — pushing the tag is the
+`vX.Y.Z`. There is no manual release process, pushing the tag is the
 whole release. Only the maintainer does this; it's a visible, public
 action.
 

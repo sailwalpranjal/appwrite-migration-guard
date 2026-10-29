@@ -21,7 +21,7 @@
 
 Appwrite already provides migration tooling, and its own documentation
 recommends validating permissions and data integrity after a migration or
-self-hosted upgrade — because migrations can produce partial transfers,
+self-hosted upgrade, because migrations can produce partial transfers,
 permission drift, or silently-skipped resources. Most teams currently
 validate this by hand, or not at all, and only discover a problem once an
 application starts failing in production.
@@ -41,7 +41,7 @@ An independent, local-first CLI that:
 ## What amg is not
 
 - Not a migration engine. It never moves or writes data in your Appwrite
-  projects — it only reads, for inventory and verification.
+  projects, it only reads, for inventory and verification.
 - Not an Appwrite clone, BaaS, or admin-console replacement.
 - Not a hosted SaaS, dashboard, or multi-tenant service.
 - Not AI/ML-based. There is no model, no LLM, no generated analysis —
@@ -58,7 +58,7 @@ invariant checking (anything specific to what *your* app means by its
 data), policy-as-code or approval workflows, and backup/rollback
 verification. Each of these would require either executing your
 application's own logic or encoding assumptions about it that amg has no
-way to verify generically — building them in would turn amg into a
+way to verify generically, building them in would turn amg into a
 different, much larger product (a generic data-integrity/monitoring
 platform) with a correspondingly larger surface to get wrong. See
 [docs/comparison-model.md](docs/comparison-model.md#what-this-does-not-do)
@@ -92,12 +92,12 @@ go install github.com/sailwalpranjal/appwrite-migration-guard/cmd/amg@latest
 ```
 
 works once `v0.1.0` is published (the Go module proxy can take a few
-minutes to index a brand new tag — use `@v0.1.0` explicitly if
+minutes to index a brand new tag, use `@v0.1.0` explicitly if
 `@latest` hasn't picked it up yet). Verified live: `go install
 .../cmd/amg@v0.1.0` resolves and builds correctly. One real difference
 from the prebuilt release binaries: `go install` doesn't have
 GoReleaser's `-ldflags`, so `amg version` reports `dev (commit none,
-built unknown)` instead of the real released version/commit/date — a
+built unknown)` instead of the real released version/commit/date, a
 functional binary either way, just without embedded version metadata.
 Use a prebuilt binary below if that matters to you.
 
@@ -134,11 +134,11 @@ count) and every Storage bucket/file (including each file's MD5 content
 signature) in the configured project. Add `--json` for machine-readable
 output, `--no-row-counts` to skip row counts, `--sample-rows N` to also
 fingerprint the first N rows per table for content verification (off by
-default — this reads real row data, unlike counts), `--concurrency N`
+default, this reads real row data, unlike counts), `--concurrency N`
 to change how many Appwrite requests run at once (default 4), or
 `--resources tables,storage,...` to restrict collection to specific
 categories (`tables`, `storage`, `users`, `functions`, `sites`; default
-is all) — matching your API key's actual scopes instead of hitting a
+is all), matching your API key's actual scopes instead of hitting a
 hard authorization failure for a category you were never granted access
 to and don't need (see the scope list under
 [Configuration](#configuration)). `inventory`, `snapshot`, `verify`, and
@@ -168,11 +168,11 @@ and prints exactly what changed, classified PASS/WARN/BLOCK. See
 `AMG_DEST_*` concurrently, then runs the identical offline comparison
 engine `compare` uses. It answers "does the destination match the source
 on everything amg checks" — resource existence, permissions, config,
-table schema, and (if enabled) row/file content — not "is this migration
+table schema, and (if enabled) row/file content, not "is this migration
 correct end to end"; see [docs/comparison-model.md](docs/comparison-model.md#what-this-does-not-do)
 for what's deliberately outside that check, on every result including PASS.
 Both `compare` and `verify` accept `--strict`, which treats an unexpected
-destination resource as BLOCK instead of the default WARN — see
+destination resource as BLOCK instead of the default WARN, see
 [docs/comparison-model.md#policy](docs/comparison-model.md#policy) for
 when that default is (and isn't) the right call.
 
@@ -184,7 +184,7 @@ when that default is (and isn't) the right call.
 connectivity, authentication, and Appwrite version on both
 `AMG_SOURCE_*` and `AMG_DEST_*`, then inventories both sides and checks
 whether the destination already has a resource with the same ID as
-something in the source — a real collision risk. It answers "can I
+something in the source, a real collision risk. It answers "can I
 technically connect and proceed without an obvious collision" — not
 "is this migration safe" in any broader sense (no size/load estimate, no
 migration-specific risk assessment); see
@@ -196,15 +196,15 @@ to save the checklist for `amg report`, the same as `doctor`.
 ./amg report --format html --out report.html result.json
 ```
 
-`report` re-renders a saved `--json` result — from `compare`/`verify`
-*or* `doctor`/`preflight` (it detects which automatically) — as `text`
+`report` re-renders a saved `--json` result, from `compare`/`verify`
+*or* `doctor`/`preflight` (it detects which automatically), as `text`
 (default), `json` (pretty-printed), or a self-contained `html` file with
 no external stylesheet, script, or network request of any kind, safe to
 open straight from disk or attach to a PR/ticket. Every value is
 HTML-escaped (a resource literally named `<script>...</script>` renders
 as inert text, not executes), and PASS/WARN/BLOCK is always shown as
 text, never color alone. `report` makes no network calls and needs no
-Appwrite credentials — it only reads the JSON file you give it.
+Appwrite credentials, it only reads the JSON file you give it.
 
 ## Configuration
 
@@ -212,10 +212,10 @@ amg reads configuration from environment variables (and an optional local
 `.env` file, which never overrides a real environment variable). See
 [.env.example](.env.example) for the full list:
 
-- `APPWRITE_ENDPOINT` / `APPWRITE_PROJECT_ID` / `APPWRITE_API_KEY` — a
+- `APPWRITE_ENDPOINT` / `APPWRITE_PROJECT_ID` / `APPWRITE_API_KEY`, a
   single target environment, used by commands that operate on one project
   (`inventory`, `snapshot`, `doctor`).
-- `AMG_SOURCE_*` / `AMG_DEST_*` — a source/destination pair, used by
+- `AMG_SOURCE_*` / `AMG_DEST_*`, a source/destination pair, used by
   commands that compare two environments (`preflight`, `verify`).
 
 API keys are never logged, never written to manifests or reports, and are
@@ -223,7 +223,7 @@ only ever sent as the `X-Appwrite-Key` HTTP header.
 
 Every command that talks to Appwrite (`doctor`, `inventory`, `snapshot`,
 `verify`, `preflight`) accepts `--timeout <duration>` (e.g. `--timeout
-10m`), bounding the whole run — the default (2-3 minutes, 10s for
+10m`), bounding the whole run, the default (2-3 minutes, 10s for
 `doctor`) is sized for a small/medium project and a responsive network,
 not a large project or a slow self-hosted endpoint, so raise it if a run
 hits `context deadline exceeded` against real data.
@@ -233,21 +233,21 @@ hits `context deadline exceeded` against real data.
 **Appwrite Cloud** (fastest way to try amg against something real):
 
 1. Create a free account at [cloud.appwrite.io](https://cloud.appwrite.io).
-2. Create a project — this gives you a **Project ID**, and your
+2. Create a project, this gives you a **Project ID**, and your
    **Endpoint** is `https://cloud.appwrite.io/v1` (or your selected
    region's endpoint, shown in the project's Overview page).
 3. In the project, go to **Overview → Integrate with your server →
    API keys** (or **Settings → API keys**) and create a new API key.
-   For amg's own commands, the scopes actually used are narrow — grant
+   For amg's own commands, the scopes actually used are narrow, grant
    only what the command you're running needs:
-   - `health.read` — `amg doctor`'s connectivity/auth check.
+   - `health.read`, `amg doctor`'s connectivity/auth check.
    - `databases.read`, `tables.read` (or `collections.read` if your
      project still has legacy Databases), `rows.read` (or
-     `documents.read`) — TablesDB inventory.
-   - `buckets.read`, `files.read` — Storage inventory.
-   - `users.read` — Users inventory.
-   - `functions.read` — Functions inventory.
-   - `sites.read` — Sites inventory.
+     `documents.read`), TablesDB inventory.
+   - `buckets.read`, `files.read`, Storage inventory.
+   - `users.read`, Users inventory.
+   - `functions.read`, Functions inventory.
+   - `sites.read`, Sites inventory.
    amg never requests a write scope for any resource type it inventories
    — it only ever reads (see [What amg is](#what-amg-is)).
 4. `cp .env.example .env`, fill in `APPWRITE_ENDPOINT`/
@@ -270,7 +270,7 @@ comparing locally: follow Appwrite's own
 which uses their official Docker installer image to generate a Docker
 Compose setup and walks you through a browser-based setup wizard at
 `http://localhost:<port>`. This project deliberately doesn't restate
-that command here — Appwrite's own installer has changed shape across
+that command here, Appwrite's own installer has changed shape across
 versions (a per-version `appwrite/appwrite` image vs. a dedicated
 `appwrite/install` image, different default ports across guides), and
 duplicating a specific command in this README risks it silently going
@@ -304,7 +304,7 @@ minutes apart, after deliberately changing a table's permissions and
 `rowSecurity` flag):
 
 ```text
-Appwrite Migration Guard — compare
+Appwrite Migration Guard, compare
 
 Source:      source
 Destination: destination
@@ -317,12 +317,12 @@ Result: BLOCK
 
 The same result rendered with `amg report --format html` produces a
 static page with a PASS/WARN/BLOCK badge, a findings table, and no
-external dependencies — safe to open offline or attach to a PR:
+external dependencies, safe to open offline or attach to a PR:
 
 ![Example amg HTML report showing a BLOCK result with missing_resource, permission_changed, content_changed, row_count_unconfirmed, and unexpected_resource findings](docs/images/report-example.png)
 
 *Illustrative example with synthetic project/resource names (`production`,
-`staging-migrated`, `orders`, `avatars`) — real `amg compare`/`report`
+`staging-migrated`, `orders`, `avatars`), real `amg compare`/`report`
 output, not a mockup, generated the same way the [Testing](#testing)
 section's live-verification runs were.*
 
@@ -379,7 +379,7 @@ go test ./...
 
 Every "supported"/"tested" claim in this repository traces to a test in
 the corresponding package (`*_test.go` next to the code it tests) or to
-one of the live runs below, against a real Appwrite Cloud project — not
+one of the live runs below, against a real Appwrite Cloud project, not
 mocked HTTP. Each row is one thing actually done, once, with a specific
 observed result:
 
@@ -389,7 +389,7 @@ observed result:
 | TablesDB | Deleted the table, `amg compare` | `missing_resource` fired |
 | TablesDB | `amg verify` live against the same project as both source and destination | PASS |
 | Table schema | Created a table with a string column, widened its `size` (50 -> 100), snapshotted before/after, `amg compare` | `schema_changed` (BLOCK) with the two differing digests; comparing a manifest against itself stayed PASS |
-| Storage | Created a bucket + file, snapshotted, deleted and re-uploaded the same file ID with different content, snapshotted, `amg compare` | `content_changed` with the exact before/after MD5 signatures — without amg downloading the file |
+| Storage | Created a bucket + file, snapshotted, deleted and re-uploaded the same file ID with different content, snapshotted, `amg compare` | `content_changed` with the exact before/after MD5 signatures, without amg downloading the file |
 | Preflight | Pointed `AMG_SOURCE_*`/`AMG_DEST_*` at the same project | `Destination conflict` BLOCK for the already-existing database ID |
 | Preflight | Ran with bad credentials | The specific "API key was rejected" reason, not a generic error |
 | Row sampling | Table with two rows, `--sample-rows 10`, edited one row, re-snapshotted, `amg compare` | `row_content_changed` naming the changed row and its before/after digests; the unchanged row and both rows' `$updatedAt` drift produced no finding |
@@ -398,10 +398,10 @@ observed result:
 | Users | Disabled the user, added a label, re-snapshotted, `amg compare` | Both changes (`enabled`, `labels`) reported, no PII in either manifest |
 | Functions | Created a function (raw response included `"vars":[]`), snapshotted, changed schedule and execute permissions, re-snapshotted, `amg compare` | Both changes reported; grepping both manifests for `vars`/secret-shaped strings found nothing |
 | Sites | Created a site, snapshotted, changed logging flag/build command/output directory, re-snapshotted, `amg compare` | All three changes reported, no `vars` leakage |
-| Legacy Databases | Created a database via `POST /v1/tablesdb`, fetched it via `GET /v1/databases` (the legacy list endpoint) | Byte-for-byte identical response — confirms amg needs no separate legacy collector |
+| Legacy Databases | Created a database via `POST /v1/tablesdb`, fetched it via `GET /v1/databases` (the legacy list endpoint) | Byte-for-byte identical response, confirms amg needs no separate legacy collector |
 | Full acceptance run | Provisioned a realistic mid-sized project via the real API (1 database, 3 tables with 11 columns/3 indexes/9 rows, a storage bucket with 2 files, 3 users with a disabled account and a label, 1 function, 1 site), ran `doctor`/`inventory`/`snapshot`/`preflight`/`verify`/`compare` against it | `doctor`/`inventory`/`verify` PASS on the untouched project; `preflight` with source=destination correctly BLOCKed on all 12 resource ID conflicts |
-| Regression coverage | From that same project, in one pass: widened a column, changed table permissions, edited a row, deleted a table, replaced a file's content, changed a function's schedule, cleared a site's install command, changed its build command, added an extra row, added an extra function | `amg compare` reported exactly the 11 corresponding findings (`schema_changed`, `permission_changed`, `row_content_changed`, `missing_resource`, `content_changed`+`name_changed`, `config_changed` x3, `row_count_mismatch`, `row_sample_unexpected`) and nothing else — no false positives, no missed findings |
-| Policy | Same extra-function scenario, compared once under the default policy and once with `--strict` | `unexpected_resource`/`row_sample_unexpected` are WARN under default, BLOCK under `--strict` — same finding, correct severity both times |
+| Regression coverage | From that same project, in one pass: widened a column, changed table permissions, edited a row, deleted a table, replaced a file's content, changed a function's schedule, cleared a site's install command, changed its build command, added an extra row, added an extra function | `amg compare` reported exactly the 11 corresponding findings (`schema_changed`, `permission_changed`, `row_content_changed`, `missing_resource`, `content_changed`+`name_changed`, `config_changed` x3, `row_count_mismatch`, `row_sample_unexpected`) and nothing else, no false positives, no missed findings |
+| Policy | Same extra-function scenario, compared once under the default policy and once with `--strict` | `unexpected_resource`/`row_sample_unexpected` are WARN under default, BLOCK under `--strict`, same finding, correct severity both times |
 | Endpoint region mismatch | Pointed a valid project/key pair at the wrong Appwrite Cloud region's endpoint (`fra` instead of the project's actual `nyc`), ran `amg doctor` | Reproduced Appwrite's `general_access_forbidden` 401 ("Project is not accessible in this region"); fixed amg to append a concrete, actionable explanation instead of a bare error string (see Changelog) |
 | Ambiguous manifest labels | Snapshotted the same project twice without `--label` (both default to `"target"`), ran `amg compare` | Reproduced an unreadable `"exists in target but is missing in target"` message; fixed amg to print an explicit advisory in text, JSON-driven HTML, and to expose `AmbiguousLabels()` for callers (see Changelog) |
 
@@ -409,7 +409,7 @@ Every row above through "Legacy Databases" used a throwaway dev project
 with its test resources deleted afterward. The last four rows used a
 separate, dedicated Appwrite Cloud project provisioned specifically as a
 standing acceptance-test fixture (a realistic mid-sized "TaskFlow"
-project-management app — see `docs/acceptance-test-fixture.md`) and left
+project-management app, see `docs/acceptance-test-fixture.md`) and left
 in place for future regression runs, not deleted. Fourteen live-
 verification passes total (ten from before this stage, plus the four
 acceptance-run rows above); see `CHANGELOG.md` for the exact date/commit
@@ -428,31 +428,31 @@ proving amg actually detects the problems it claims to:
 
 | Scenario | Proves |
 |---|---|
-| A — destination missing a table | `missing_resource` → BLOCK |
-| B — destination missing a file | `missing_resource` → BLOCK |
-| C — permission changed | `permission_changed` → BLOCK |
-| D — timestamps differ after "migration" | expected transformation → PASS, no finding |
-| E — transient API failure | retried automatically, run still succeeds |
-| F — persistent API failure | `Collect` returns an error, never a silent partial success |
-| G — interrupted run (context deadline) | `inventory.Collect` **and** `amg doctor` both error out, never exit OK |
-| H — table schema half-migrated (a column silently dropped) | `schema_changed` → BLOCK |
-| I — server validation error | the specific message survives, never collapsed into a generic connectivity error |
+| A, destination missing a table | `missing_resource` → BLOCK |
+| B, destination missing a file | `missing_resource` → BLOCK |
+| C, permission changed | `permission_changed` → BLOCK |
+| D, timestamps differ after "migration" | expected transformation → PASS, no finding |
+| E, transient API failure | retried automatically, run still succeeds |
+| F, persistent API failure | `Collect` returns an error, never a silent partial success |
+| G, interrupted run (context deadline) | `inventory.Collect` **and** `amg doctor` both error out, never exit OK |
+| H, table schema half-migrated (a column silently dropped) | `schema_changed` → BLOCK |
+| I, server validation error | the specific message survives, never collapsed into a generic connectivity error |
 
-Scenarios H and I aren't hypothetical — each is modeled directly on a
+Scenarios H and I aren't hypothetical, each is modeled directly on a
 real, verified Appwrite bug, not invented: H on
 [appwrite/appwrite#12770](https://github.com/appwrite/appwrite/issues/12770)
 (a self-hosted upgrade silently dropped two columns from the `functions`
 table), I on
 [appwrite/appwrite#13477](https://github.com/appwrite/appwrite/issues/13477)
 (Appwrite's own backend endpoint, `Migrations/Appwrite/Report/Get.php`,
-catches the real exception — a missing `policies` field — and rethrows
+catches the real exception, a missing `policies` field, and rethrows
 a generic "unable to connect" message, so the response the client
 receives was already masked server-side; amg's own error classification
 must not compound that by masking further). Both issues were fetched and
 read in full via the GitHub API before being encoded as scenarios here,
 not guessed from a title.
 
-This is deliberately synthetic, fixture-driven data — unlike the rest of
+This is deliberately synthetic, fixture-driven data, unlike the rest of
 amg's development, which was proven against a live Appwrite Cloud
 project at every stage (see [Testing](#testing) and `CHANGELOG.md`). The
 lab's purpose is the opposite: repeatable, CI-runnable, credential-free
@@ -465,7 +465,7 @@ every push (`.github/workflows/ci.yml`).
 - Pre-alpha: every command (`version`, `doctor`, `inventory`, `snapshot`,
   `compare`, `verify`, `preflight`, `report`) does real work now against a
   live Appwrite project. What's still missing is listed item by item
-  below and in [Roadmap](#roadmap) — some are resource-coverage gaps,
+  below and in [Roadmap](#roadmap), some are resource-coverage gaps,
   some are depth gaps (e.g. table schema/column/index drift, closed in
   this stage); treat this list, not a summary phrase, as the source of
   truth for what amg does and doesn't check.
@@ -475,13 +475,13 @@ every push (`.github/workflows/ci.yml`).
   migration.
 - Inventory (and therefore comparison) covers TablesDB
   (databases/tables/row counts), Storage (buckets/files), Users,
-  Functions, and Sites — every resource type from the original spec.
+  Functions, and Sites, every resource type from the original spec.
   Legacy Databases (collections/documents) needed no separate collector:
   see [docs/migration-semantics.md](docs/migration-semantics.md) for the
   live + source-code verification, including one caveat that wasn't
   reproduced live (a scope limitation, not a data-shape doubt).
 - Function and Site comparison is config-only (runtime/framework,
-  schedule, timeout, build commands, ...) — amg has no way to know
+  schedule, timeout, build commands, ...), amg has no way to know
   whether the actual *code* behaves the same after a migration, only
   whether configuration matches. Environment variables (`vars`) are
   never collected at all for either: Appwrite's own model documents them
@@ -498,15 +498,15 @@ every push (`.github/workflows/ci.yml`).
   exhaustive: `--sample-rows N` fingerprints the first N rows per table
   (by `$id`) and catches real content/permission changes *within* that
   sample, but a changed row outside the sampled window is invisible to
-  it. It is off by default because — unlike counts — it reads real row
+  it. It is off by default because, unlike counts, it reads real row
   data. See [docs/comparison-model.md](docs/comparison-model.md).
 - Row counts above 5,000 are capped by Appwrite itself; amg reports this
   as `row_count_unconfirmed` (WARN), never as a false match.
 - Only one normalization/"expected transformation" rule exists so far
-  ($createdAt/$updatedAt are never compared — see
+  ($createdAt/$updatedAt are never compared, see
   [docs/comparison-model.md](docs/comparison-model.md)). Real migration
   paths may have more expected transformations amg doesn't know about yet.
-- Not tested against every self-hosted Appwrite version — verified so far
+- Not tested against every self-hosted Appwrite version, verified so far
   against Appwrite Cloud running server version 2.3.0.
 - See [docs/known-false-negatives.md](docs/known-false-negatives.md) for
   a concrete, table-form list of specific differences amg's current
@@ -537,6 +537,16 @@ every push (`.github/workflows/ci.yml`).
    every push, `gofmt`/`go vet`/`go test -race`/`go build`).
 8. ~~Cross-platform release binaries~~ — done: see
    [releases](https://github.com/sailwalpranjal/appwrite-migration-guard/releases).
+
+## Product thinking
+
+How I would run this as a product, written after the build:
+
+- [PRD](docs/product/PRD.md): problem, user, goals, non-goals, acceptance criteria, risks
+- [Roadmap](docs/product/ROADMAP.md): Now / Next / Later with RICE and ICE arithmetic (the list above records what is done; this is what I would do next)
+- [Decision log](docs/product/DECISIONS.md): six decisions visible in the code, such as PASS/WARN/BLOCK instead of a score
+- [Metrics plan](docs/product/METRICS.md): opt-in signals only; amg has no telemetry
+- [Project board setup](docs/project-board.md), [issue drafts](docs/issues/)
 
 ## Contributing
 
