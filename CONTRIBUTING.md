@@ -1,7 +1,7 @@
 # Contributing
 
 Appwrite Migration Guard is a solo-maintained, dependency-light Go
-project. Contributions are welcome, especially:
+project. The most useful things to send:
 
 - Verified Appwrite API behavior (with a link to the source/docs you
   checked) for resource types not yet covered.
